@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# TEMPLATE ONLY. Do not submit until the account/site confirms every resource directive.
+# SLURM does not expand shell variables inside #SBATCH lines.
+#SBATCH --job-name=cdcu-xlmv
+#SBATCH --output=logs/slurm/%x-%j.out
+#SBATCH --error=logs/slurm/%x-%j.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=REPLACE_AFTER_SITE_VERIFICATION
+#SBATCH --mem=REPLACE_AFTER_SITE_VERIFICATION
+#SBATCH --time=REPLACE_AFTER_SITE_VERIFICATION
+# Add verified --partition / --account / --qos directives if required.
+# Add the exact site-approved MIG request. Do NOT guess or request all slices.
+
+set -Eeuo pipefail
+umask 077
+
+: "${PROJECT_ROOT:?Set absolute path to user-owned project checkout}"
+: "${ENV_PREFIX:?Set absolute path to project-owned venv/Conda prefix}"
+: "${RUN_CONFIG:?Set absolute path to frozen non-null config}"
+: "${OUTPUT_ROOT:?Set absolute path to verified user-owned output/checkpoint storage}"
+PROJECT_ROOT="$(realpath "$PROJECT_ROOT")"
+ENV_PREFIX="$(realpath "$ENV_PREFIX")"
+RUN_CONFIG="$(realpath "$RUN_CONFIG")"
+OUTPUT_ROOT="$(realpath "$OUTPUT_ROOT")"
+USER_NOW="$(id -un)"
+OWNER="$(stat -c '%U' "$PROJECT_ROOT")"
+OUT_OWNER="$(stat -c '%U' "$OUTPUT_ROOT")"
+[[ "$OWNER" == "$USER_NOW" ]] || { echo "STOP: project root not owned by current user"; exit 31; }
+[[ "$OUT_OWNER" == "$USER_NOW" ]] || { echo "STOP: output root not owned by current user"; exit 35; }
+[[ -d "$OUTPUT_ROOT" && -w "$OUTPUT_ROOT" ]] || { echo "STOP: output root must already exist and be writable"; exit 36; }
+[[ -f "$RUN_CONFIG" ]] || { echo "STOP: missing config"; exit 32; }
+PYTHON_BIN="$ENV_PREFIX/bin/python"
+[[ -x "$PYTHON_BIN" ]] || { echo "STOP: environment python not found"; exit 33; }
+
+cd "$PROJECT_ROOT"
+JOB_ID="${SLURM_JOB_ID:?Must run under sbatch}"
+RUN_ROOT="$OUTPUT_ROOT/cdcu-xlmv-baseline/runs"
+RUN_DIR="$RUN_ROOT/$JOB_ID"
+export PROJECT_ALLOWED_OUTPUT_ROOT="$OUTPUT_ROOT"
+[[ ! -e "$RUN_DIR" ]] || { echo "STOP: run directory exists: $RUN_DIR"; exit 34; }
+mkdir -p "$RUN_DIR"
+
+{
+  echo "job_id=$JOB_ID"
+  echo "user=$USER_NOW"
+  echo "hostname=$(hostname)"
+  echo "start_utc=$(date -u +%FT%TZ)"
+  echo "git_commit=$(git rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
+  echo "config_sha256=$(sha256sum "$RUN_CONFIG" | awk '{print $1}')"
+  echo "slurm_job_name=${SLURM_JOB_NAME:-UNKNOWN}"
+  echo "slurm_partition=${SLURM_JOB_PARTITION:-UNKNOWN}"
+  echo "slurm_cpus=${SLURM_CPUS_PER_TASK:-UNKNOWN}"
+  echo "cuda_visible_devices=${CUDA_VISIBLE_DEVICES:-SET_BY_SITE_OR_UNKNOWN}"
+} | tee "$RUN_DIR/job_metadata.txt"
+
+# One allocated GPU only. Record actual runtime device inside the allocation.
+"$PYTHON_BIN" - <<'PY' | tee "$RUN_DIR/runtime_device_report.txt"
+import sys, torch
+print("python", sys.version)
+print("torch", torch.__version__)
+print("cuda_available", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("visible_device_count", torch.cuda.device_count())
+    print("device_name", torch.cuda.get_device_name(0))
+    print("bf16_supported", torch.cuda.is_bf16_supported())
+    free_bytes, total_bytes = torch.cuda.mem_get_info()
+    print("free_bytes", free_bytes, "total_bytes", total_bytes)
+PY
+
+# Implement and CPU-test this entry point before enabling this command.
+srun --ntasks=1 "$PYTHON_BIN" -m src.training.train_baseline \
+  --config "$RUN_CONFIG" \
+  --run-dir "$RUN_DIR"
+# Tuning jobs must NOT pass --evaluate-test.
+# Add --evaluate-test only to a separate final run after tuning settings are locked.
+
+STATUS=$?
+echo "end_utc=$(date -u +%FT%TZ)" | tee -a "$RUN_DIR/job_metadata.txt"
+echo "exit_status=$STATUS" | tee -a "$RUN_DIR/job_metadata.txt"
+exit "$STATUS"

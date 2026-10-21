@@ -1,0 +1,64 @@
+# SAFE TEMPLATE. Fill null fields only after verification. This file is a proposal, not a claim of measured settings.
+experiment_id: xlmv_cfpb_indomain_baseline_v1
+model:
+  name: facebook/xlm-v-base
+  revision: null  # Pin exact Hub commit / staged checkpoint fingerprint
+  trust_remote_code: false
+data:
+  release_id: null  # Required; use the verified data release identifier/hash
+  train_csv: data/processed/baseline_train.csv
+  validation_csv: data/processed/baseline_validation.csv
+  test_csv: data/processed/baseline_test.csv
+  label_map: data/processed/label_map.json
+  split_manifest: data/manifests/split_indomain.csv
+  checksums_manifest: data/manifests/checksums.csv
+  text_column: text
+  label_column: intent_id
+  id_column: example_id
+  group_column: group_id
+sequence:
+  initial_max_length: 128
+  candidate_max_lengths: [128, 256]
+  final_max_length: null
+  truncation: true
+training:
+  tuning_seed: 42
+  final_seeds: [13, 42, 2026]
+  learning_rate_candidates: [0.00001, 0.00002]
+  optional_learning_rate: 0.00003
+  max_tuning_epochs: 3
+  max_final_epochs: 4
+  optimizer: adamw_torch
+  weight_decay: 0.01
+  warmup_ratio: 0.06
+  max_grad_norm: 1.0
+  initial_micro_batch: 1
+  final_micro_batch: null
+  gradient_accumulation_steps: null
+  gradient_checkpointing: true
+  precision: null  # choose bf16/fp16/fp32 only after allocated-device test
+  num_workers: 0
+  eval_batch_size: 1
+  eval_save_steps: 250
+  logging_steps: 25
+  save_total_limit: 2
+  early_stopping_patience: 2
+  primary_metric: f1_macro
+  evaluate_test_after_selection_only: true
+resources:
+  slurm_partition: null
+  gpu_request: null
+  cpus_per_task: null
+  memory: null
+  walltime: null
+paths:
+  environment_prefix: null
+  cache_root: null
+  output_root: null
+  log_root: null
+safety:
+  no_system_changes: true
+  no_shared_environment_modification: true
+  no_overwrite_existing_run: true
+  no_concurrent_trials_by_default: true
+  fail_if_required_value_null: true
