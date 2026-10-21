@@ -1,5 +1,8 @@
 # data + models are never committed; prep scripts are
-/data/
+/data/raw/
+/data/interim/
+/data/processed/
+!/data/manifests/
 models/
 checkpoints/
 *.bin

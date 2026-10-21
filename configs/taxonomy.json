@@ -1,0 +1,220 @@
+{
+  "version": "1.0",
+  "project": "Cross-Domain Complaint Understanding via Multilingual Encoders",
+  "task": "Consumer complaint intent classification",
+  "n_classes": 16,
+  "classes": [
+    {
+      "intent_id": 0,
+      "intent_label": "reporting_incorrect_information",
+      "definition": "Disputes asserting that inaccurate, outdated, or erroneous data appears on credit reports.",
+      "confusable_with": ["reporting_investigation_dispute", "reporting_improper_use"],
+      "rule_patterns": [
+        "incorrect information on your report",
+        "incorrect information on credit report"
+      ]
+    },
+    {
+      "intent_id": 1,
+      "intent_label": "reporting_investigation_dispute",
+      "definition": "Complaints concerning the procedural failure, delay, or inadequacy of a credit reporting agency's investigation into a previously filed dispute.",
+      "confusable_with": ["reporting_incorrect_information", "servicing_dispute"],
+      "rule_patterns": [
+        "investigation into an existing problem",
+        "investigation into existing problem",
+        "credit reporting company's investigation"
+      ]
+    },
+    {
+      "intent_id": 2,
+      "intent_label": "reporting_improper_use",
+      "definition": "Unauthorized inquiry, impermissible access, identity theft credit monitoring, or inability to access credit reports.",
+      "confusable_with": ["fraud_or_scam", "account_access"],
+      "rule_patterns": [
+        "improper use of your report",
+        "unable to get your credit report",
+        "credit monitoring or identity theft"
+      ]
+    },
+    {
+      "intent_id": 3,
+      "intent_label": "fraud_or_scam",
+      "definition": "Unauthorized financial transactions, identity theft, scams, or unaddressed fraud alerts.",
+      "confusable_with": ["reporting_improper_use", "transaction_problem"],
+      "rule_patterns": [
+        "fraud or scam",
+        "unauthorized transaction",
+        "identity theft",
+        "problem with fraud alerts or security freezes"
+      ]
+    },
+    {
+      "intent_id": 4,
+      "intent_label": "debt_not_owed",
+      "definition": "Collection attempts for debts that the consumer does not owe, was already paid, or was discharged.",
+      "confusable_with": ["debt_communication", "debt_threats"],
+      "rule_patterns": [
+        "attempts to collect debt not owed",
+        "cont'd attempts collect debt not owed"
+      ]
+    },
+    {
+      "intent_id": 5,
+      "intent_label": "debt_threats",
+      "definition": "Unlawful harassment, abusive language, illegal legal threats, or misrepresentation by debt collectors.",
+      "confusable_with": ["debt_communication", "debt_not_owed"],
+      "rule_patterns": [
+        "took or threatened to take negative or legal action",
+        "false statements or representation",
+        "threatened to contact someone"
+      ]
+    },
+    {
+      "intent_id": 6,
+      "intent_label": "debt_communication",
+      "definition": "Violations related to frequency, timing, or required disclosures in debt collection communications.",
+      "confusable_with": ["debt_threats"],
+      "rule_patterns": [
+        "written notification about debt",
+        "communication tactics",
+        "disclosure verification of debt",
+        "electronic communications"
+      ]
+    },
+    {
+      "intent_id": 7,
+      "intent_label": "payment_problem",
+      "definition": "Failures in processing, crediting, or executing incoming debt/bill payments or unauthorized recurring debits.",
+      "confusable_with": ["transaction_problem", "funds_availability"],
+      "rule_patterns": [
+        "trouble during payment process",
+        "struggling to pay",
+        "problem when making payments",
+        "payment to acct not credited",
+        "making/receiving payments",
+        "problem with a lender or other company charging your account",
+        "can't stop withdrawals"
+      ]
+    },
+    {
+      "intent_id": 8,
+      "intent_label": "transaction_problem",
+      "definition": "Disputes regarding merchant charges, card usage failures, unauthorized point-of-sale items, or point-of-sale transfer issues.",
+      "confusable_with": ["payment_problem", "fraud_or_scam"],
+      "rule_patterns": [
+        "problem with a purchase shown on your statement",
+        "other transaction problem",
+        "other service problem",
+        "unexpected or other fees",
+        "trouble using your card",
+        "trouble using the card",
+        "problem with a purchase or transfer"
+      ]
+    },
+    {
+      "intent_id": 9,
+      "intent_label": "funds_availability",
+      "definition": "Delays, holds, unexpected unavailability of deposited funds, overdraft penalties from delayed availability.",
+      "confusable_with": ["account_access", "transaction_problem"],
+      "rule_patterns": [
+        "problem caused by your funds being low",
+        "managing, opening, or closing your mobile wallet",
+        "deposits and withdrawals",
+        "money was not available when promised",
+        "money was taken from your bank account on the wrong day"
+      ]
+    },
+    {
+      "intent_id": 10,
+      "intent_label": "account_access",
+      "definition": "Inability to log in, locked online portal, branch access denial, or forced closure/freezing of account.",
+      "confusable_with": ["account_management", "funds_availability"],
+      "rule_patterns": [
+        "can't access",
+        "cannot access",
+        "trouble accessing",
+        "closing your account",
+        "closing an account",
+        "account status"
+      ]
+    },
+    {
+      "intent_id": 11,
+      "intent_label": "account_management",
+      "definition": "Administrative friction in managing, opening, modifying account terms, or updating profile details.",
+      "confusable_with": ["account_access", "servicing_dispute"],
+      "rule_patterns": [
+        "managing an account",
+        "opening an account",
+        "account opening, closing, or management",
+        "managing the loan or lease",
+        "managing, opening, or closing account"
+      ]
+    },
+    {
+      "intent_id": 12,
+      "intent_label": "servicing_dispute",
+      "definition": "Escrow calculation errors, customer service failures, payoff quote delays, or repossession disputes during loan lifecycle.",
+      "confusable_with": ["payment_problem", "account_management"],
+      "rule_patterns": [
+        "dealing with your lender or servicer",
+        "dealing with my lender or servicer",
+        "loan servicing, payments, escrow account",
+        "problem with customer service",
+        "repossession",
+        "problems at the end of the loan or lease",
+        "problem with the payoff process at the end of the loan",
+        "struggling to repay your loan",
+        "issues with repayment",
+        "problem with the payoff process"
+      ]
+    },
+    {
+      "intent_id": 13,
+      "intent_label": "application_problem",
+      "definition": "Friction, misrepresentation, delay, or unexplained rejection during the loan, mortgage, or credit card origination/application process.",
+      "confusable_with": ["credit_terms_dispute", "closing_process"],
+      "rule_patterns": [
+        "applying for a mortgage",
+        "application, originator, mortgage broker",
+        "taking out the loan or lease",
+        "getting a loan",
+        "getting a credit card",
+        "application processing delay",
+        "getting the loan",
+        "getting a loan or lease",
+        "was approved for a loan, but didn't receive the money"
+      ]
+    },
+    {
+      "intent_id": 14,
+      "intent_label": "credit_terms_dispute",
+      "definition": "Disputes regarding unexpected fees, APR interest rate increases, credit line cuts, misleading advertising, or reward point denial.",
+      "confusable_with": ["application_problem", "transaction_problem"],
+      "rule_patterns": [
+        "credit limit",
+        "apr or interest rate",
+        "rewards",
+        "advertising and marketing",
+        "credit determination",
+        "fees or interest",
+        "charged upfront or unexpected fees",
+        "charged fees or interest you didn't expect",
+        "confusing or missing disclosures",
+        "other features, terms, or problems",
+        "problem with additional add-on products or services",
+        "confusing or misleading advertising"
+      ]
+    },
+    {
+      "intent_id": 15,
+      "intent_label": "closing_process",
+      "definition": "Disputes occurring at mortgage settlement, closing disclosure discrepancies, or unexpected closing fees.",
+      "confusable_with": ["application_problem", "servicing_dispute"],
+      "rule_patterns": [
+        "closing on a mortgage",
+        "settlement process and costs"
+      ]
+    }
+  ]
+}
