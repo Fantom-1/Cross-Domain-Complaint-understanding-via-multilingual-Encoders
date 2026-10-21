@@ -1,0 +1,71 @@
+data:
+  checksums_manifest: data/manifests/checksums.csv
+  group_column: group_id
+  id_column: example_id
+  label_column: intent_id
+  label_map: data/processed/label_map.json
+  release_id: b9f4207
+  split_manifest: data/manifests/split_indomain.csv
+  test_csv: data/processed/baseline_test.csv
+  text_column: text
+  train_csv: data/processed/baseline_train.csv
+  validation_csv: data/processed/baseline_validation.csv
+experiment_id: xlmv_trial_lr1e5
+model:
+  name: facebook/xlm-v-base
+  revision: 68c75dd7733d2640b3a98114e3e94196dc543fe1
+  trust_remote_code: false
+paths:
+  cache_root: /apps/cdcu/hf_cache
+  environment_prefix: /home/abdul/envs/amlc
+  log_root: /apps/cdcu/logs/slurm
+  output_root: /apps/cdcu/runs
+resources:
+  cpus_per_task: 4
+  gpu_request: gpu:1g.24gb:1
+  memory: 32G
+  slurm_partition: gpu
+  walltime: 08:00:00
+safety:
+  fail_if_required_value_null: true
+  no_concurrent_trials_by_default: true
+  no_overwrite_existing_run: true
+  no_shared_environment_modification: true
+  no_system_changes: true
+sequence:
+  candidate_max_lengths:
+  - 128
+  - 256
+  final_max_length: 128
+  initial_max_length: 128
+  truncation: true
+training:
+  early_stopping_patience: 2
+  eval_batch_size: 16
+  eval_save_steps: 250
+  evaluate_test_after_selection_only: true
+  final_micro_batch: 1
+  final_seeds:
+  - 13
+  - 42
+  - 2026
+  gradient_accumulation_steps: 8
+  gradient_checkpointing: true
+  initial_micro_batch: 1
+  learning_rate_candidates:
+  - 1.0e-05
+  - 2.0e-05
+  logging_steps: 25
+  max_final_epochs: 4
+  max_grad_norm: 1.0
+  max_tuning_epochs: 3
+  micro_batch: 1
+  num_workers: 2
+  optimizer: adamw_torch
+  optional_learning_rate: 3.0e-05
+  precision: bf16
+  primary_metric: f1_macro
+  save_total_limit: 2
+  tuning_seed: 42
+  warmup_ratio: 0.06
+  weight_decay: 0.01

@@ -1,3 +1,3 @@
 trial_id,learning_rate,seed,max_length,micro_batch,gradient_accumulation_steps,precision,gradient_checkpointing,epochs,selection_metric,status,slurm_job_id,validation_macro_f1,peak_vram_gb,elapsed_seconds,config_sha256,notes
-lr_1e5,0.00001,42,128,1,,bf16,true,3,f1_macro,blocked,,,,,,Await GPU smoke test and actual config
-lr_2e5,0.00002,42,128,1,,bf16,true,3,f1_macro,blocked,,,,,,Await GPU smoke test and actual config
+lr_1e5,0.00001,42,128,1,8,bf16,true,3,f1_macro,running,155,,,,Trial 1 submitted
+lr_2e5,0.00002,42,128,1,8,bf16,true,3,f1_macro,queued_afterok,156,,,,Trial 2 chained after Trial 1

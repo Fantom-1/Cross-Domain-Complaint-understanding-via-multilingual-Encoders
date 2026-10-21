@@ -202,12 +202,23 @@ def compute_metrics(eval_pred, num_labels: int) -> dict:
     }
 
 
-def training_args_compat(**kwargs) -> TrainingArguments:
-    # Accommodate Transformers releases that renamed evaluation_strategy to eval_strategy.
+def training_args_compat(total_train_examples: int = 32019, **kwargs) -> TrainingArguments:
+    # Accommodate Transformers releases (including 5.x)
     sig = inspect.signature(TrainingArguments.__init__)
-    if "eval_strategy" in sig.parameters:
+    if "evaluation_strategy" in kwargs and "eval_strategy" in sig.parameters:
         kwargs["eval_strategy"] = kwargs.pop("evaluation_strategy")
-    return TrainingArguments(**kwargs)
+    if "warmup_ratio" in kwargs and "warmup_ratio" not in sig.parameters:
+        ratio = kwargs.pop("warmup_ratio")
+        if "warmup_steps" in sig.parameters:
+            epochs = kwargs.get("num_train_epochs", 1.0)
+            batch = kwargs.get("per_device_train_batch_size", 1)
+            accum = kwargs.get("gradient_accumulation_steps", 1)
+            eff_batch = max(1, batch * accum)
+            steps_per_epoch = max(1, total_train_examples // eff_batch)
+            total_steps = max(1, int(epochs * steps_per_epoch))
+            kwargs["warmup_steps"] = max(1, int(total_steps * ratio))
+    valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+    return TrainingArguments(**valid_kwargs)
 
 
 def main():
@@ -331,7 +342,7 @@ def main():
         remove_unused_columns=True,
         save_safetensors=True,
     )
-    training_args = training_args_compat(**kwargs)
+    training_args = training_args_compat(total_train_examples=len(train_df), **kwargs)
     trainer_kwargs = dict(
         model=model,
         args=training_args,
