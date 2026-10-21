@@ -23,7 +23,7 @@ import requests
 
 SOURCES = {
     "cfpb": {
-        "dataset_name": "CFPB Consumer Complaint Database",
+        "dataset_name": "CFPB Consumer Complaint Database (Metadata Bulk)",
         "url": "https://files.consumerfinance.gov/ccdb/complaints.csv.zip",
         "target_dir": "data/raw/cfpb",
         "target_file": "complaints.csv.zip",
@@ -33,7 +33,21 @@ SOURCES = {
         "domain": "finance",
         "language": "en",
         "role_decision": "primary_eligible",
-        "decision_rationale": "Authentic consumer complaints filed with the CFPB containing unedited narratives across multiple financial products.",
+        "decision_rationale": "Authentic consumer complaint metadata export from CFPB.",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    },
+    "cfpb_narratives": {
+        "dataset_name": "CFPB Consumer Complaint Database (FOIA Narratives Archive)",
+        "url": "https://files.consumerfinance.gov/f/documents/CCDB_Export_2_May_2018_through_April_2021.zip",
+        "target_dir": "data/raw/cfpb",
+        "target_file": "CCDB_Export_2_May_2018_through_April_2021.zip",
+        "format": "csv.zip",
+        "license": "Public Domain (US Government Work)",
+        "license_url": "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/",
+        "domain": "finance",
+        "language": "en",
+        "role_decision": "primary_eligible",
+        "decision_rationale": "Official CFPB FOIA archive containing 439,860 verified consumer complaint narratives across 1,041,632 records.",
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     },
     "banking77_train": {
