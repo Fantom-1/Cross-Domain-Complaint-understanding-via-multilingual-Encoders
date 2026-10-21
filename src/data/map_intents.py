@@ -61,7 +61,7 @@ class IntentMapper:
                             "mapping_status": "mapped",
                             "rationale": f"Matched pattern '{pattern}' in issue/sub-issue text",
                             "evidence_url": "https://cfpb.github.io/api/ccdb/release-notes.html",
-                            "reviewer": "Automated Rule Engine (Reviewed)",
+                            "reviewer": "automated_rule_engine",
                             "review_date": "2026-10-22",
                             "notes": f"Mapped to intent_id {intent_id}"
                         }
@@ -77,7 +77,7 @@ class IntentMapper:
                 "mapping_status": "unmapped",
                 "rationale": "No qualifying taxonomy pattern matched; excluded from closed-set baseline.",
                 "evidence_url": "https://cfpb.github.io/api/ccdb/release-notes.html",
-                "reviewer": "Automated Rule Engine (Reviewed)",
+                "reviewer": "automated_rule_engine",
                 "review_date": "2026-10-22",
                 "notes": "Excluded to maintain label precision"
             }

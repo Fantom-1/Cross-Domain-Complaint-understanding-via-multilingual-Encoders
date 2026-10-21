@@ -48,18 +48,21 @@ All source files have been acquired deterministically, verified against SHA-256 
 
 ## 4. Count Reconciliation
 
-Every scanned row from the raw CFPB archive is accounted for in `data/manifests/exclusion_log.csv`:
+Every scanned row from the raw CFPB archive is now fully accounted for in `data/manifests/exclusion_log.csv`:
 
 | Stage / Category | Record Count | Percentage |
 |---|---|---|
 | **Total Scanned Rows in Archive** | **1,041,632** | 100.0% |
 | - *Excluded: Missing free-text narrative* | 601,772 | 57.8% |
-| - *Total Verified Narratives in Archive* | **439,860** | **42.2%** |
 | - *Excluded: Under 20 words (insufficient context)* | 19,838 | 1.9% |
-| - *Eligible Narratives Sampled across 9 Domains* | 114,388 | 11.0% |
+| - *Total Eligible Narratives (post-filter)* | **420,022** | **40.3%** |
+| - *Excluded: Reservoir not selected (per-product cap 15,000)* | 305,634 | 29.3% |
+| - *Candidates entering mapping pipeline* | **114,388** | **11.0%** |
 | - *Excluded: Unmapped issue/sub-issue* | 1,473 | 0.1% |
 | - *Excluded: Discarded for class balance cap* | 67,192 | 6.5% |
 | **Final Canonical Dataset (`canonical_dataset.parquet`)** | **45,723** | **4.4%** |
+
+> **Reconciliation check:** 601,772 + 19,838 + 305,634 + 1,473 + 67,192 + 45,723 = **1,041,632** ✓
 
 ---
 
@@ -121,6 +124,8 @@ Per `SYSTEM.md` and `PROJECT_BRIEF.md`:
 - `PolyAI/banking77` provides English banking queries, not complaints.
 - Resources like `COMI-LINGUA` and `MUTANT` provide code-mixed news/speech tokens for POS/NER/LID, not consumer complaint intent labels.
 - **Explicit Finding:** To evaluate genuine Hindi or Hinglish complaint understanding, dedicated human-annotated complaint narratives are required. The current dataset readiness permits a rigorous, leakage-free English baseline (`facebook/xlm-v-base`), but cannot substantiate Hindi/Hinglish claims without external annotation.
+
+> **Phase B Prerequisite — Cross-Domain Split:** Only `data/manifests/split_indomain.csv` exists. Banking77 is maintained separately but has not been assembled into a held-out cross-domain evaluation partition. A `split_crossdomain.csv` manifest must be created before any cross-domain generalization claims can be evaluated. This is a **required deliverable at the start of Phase B**.
 
 ---
 

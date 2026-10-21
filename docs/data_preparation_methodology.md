@@ -50,7 +50,7 @@ Templated form letters (frequently submitted by credit-repair agencies) constitu
 1. **Exact Deduplication:** Each normalized narrative is hashed with SHA-256 (`text_hash`). All identical texts receive a shared exact group ID (`grp_exact_<hash>`).
 2. **MinHash LSH Near-Duplicate Clustering:**
    - 5-gram word shingles are generated for each narrative (capped at 400 shingles).
-   - 64 affine hash permutations with Mersenne prime $P = 2^{61}-1$ generate a 64-dimensional signature.
+   - 64 affine hash permutations with Mersenne prime $P = 2^{31}-1 = 2{,}147{,}483{,}647$ generate a 64-dimensional signature. This prime is chosen so that products $a \cdot h + b < P^2 < 2^{62}$ fit safely within `uint64` without overflow during the vectorised NumPy path.
    - 16 bands with 4 rows each evaluate Jaccard similarity at threshold $s \approx (1/b)^{1/r} \approx (1/16)^{1/4} \approx 0.5$.
    - Near-duplicates sharing bucket keys are merged into connected components, assigning a unified `group_id`.
 

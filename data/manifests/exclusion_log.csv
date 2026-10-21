@@ -1,5 +1,6 @@
 exclusion_reason,count,rationale
 missing_narrative,601772,Row did not contain a free-text complaint narrative.
 too_short_under_20_words,19838,Complaint narrative contained fewer than 20 words.
+reservoir_not_selected,305634,Narrative passed word-count filter but was probabilistically displaced during per-product reservoir sampling (cap 15000 per domain).
 unmapped_issue,1473,Complaint issue/sub-issue did not align with 16-class project taxonomy.
 dropped_for_class_balance_cap,67192,Surplus examples discarded to enforce uniform class cap.

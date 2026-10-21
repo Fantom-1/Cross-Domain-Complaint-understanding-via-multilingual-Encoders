@@ -169,9 +169,10 @@ def download_file(url, target_path, user_agent=None, chunk_size=2 * 1024 * 1024)
                         )
                         last_log = now
     
-    if os.path.exists(target_path):
-        os.remove(target_path)
-    os.rename(temp_path, target_path)
+    # os.replace() is atomic at the NTFS/POSIX level: the original file (if any)
+    # is only removed after temp_path is successfully renamed into place.
+    # If this call fails, temp_path remains for retry and the original is untouched.
+    os.replace(temp_path, target_path)
     
     actual_sha256 = sha256.hexdigest()
     size_bytes = os.path.getsize(target_path)

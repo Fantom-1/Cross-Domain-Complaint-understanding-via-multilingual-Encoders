@@ -145,8 +145,18 @@ def build_canonical_dataset(
     
     sampled_records = [rec for bucket in product_reservoirs.values() for rec in bucket]
     rng.shuffle(sampled_records)
+    
+    # Track rows that passed both filters but were probabilistically displaced
+    # during reservoir sampling (cap = per_product_sample per domain).
+    eligible_count = sum(product_seen_counts.values())
+    reservoir_not_selected_count = eligible_count - len(sampled_records)
+    exclusion_counts["reservoir_not_selected"] = reservoir_not_selected_count
+    
     print(
-        f"  Completed scan: {total_scanned:,} rows scanned | {len(sampled_records):,} candidates sampled across {len(product_reservoirs)} domains.",
+        f"  Completed scan: {total_scanned:,} rows scanned | "
+        f"Eligible (post-filter): {eligible_count:,} | "
+        f"Reservoir-not-selected: {reservoir_not_selected_count:,} | "
+        f"{len(sampled_records):,} candidates sampled across {len(product_reservoirs)} domains.",
         flush=True
     )
     
@@ -302,12 +312,15 @@ def build_canonical_dataset(
     
     mapper.export_source_label_mapping(os.path.join(manifest_dir, "source_label_mapping.csv"))
     
-    # Export exclusion log
+    # Export exclusion log — every scanned row is now accounted for.
+    # Sum: missing_narrative + too_short + reservoir_not_selected + unmapped_issue
+    #      + dropped_for_class_balance_cap + final_canonical == total_scanned.
     with open(exclusion_log_path, "w", encoding="utf-8", newline="\n") as f:
         writer = csv.writer(f)
         writer.writerow(["exclusion_reason", "count", "rationale"])
         writer.writerow(["missing_narrative", exclusion_counts["missing_narrative"], "Row did not contain a free-text complaint narrative."])
         writer.writerow(["too_short_under_20_words", exclusion_counts["too_short_under_20_words"], "Complaint narrative contained fewer than 20 words."])
+        writer.writerow(["reservoir_not_selected", exclusion_counts["reservoir_not_selected"], "Narrative passed word-count filter but was probabilistically displaced during per-product reservoir sampling (cap 15,000 per domain)."])
         writer.writerow(["unmapped_issue", exclusion_counts["unmapped_issue"], "Complaint issue/sub-issue did not align with 16-class project taxonomy."])
         writer.writerow(["dropped_for_class_balance_cap", exclusion_counts["dropped_for_class_balance_cap"], "Surplus examples discarded to enforce uniform class cap."])
     print(f"Saved exclusion log: {exclusion_log_path}", flush=True)

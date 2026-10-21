@@ -100,11 +100,21 @@ d:\NLP\
 - [x] Inspect Git status, working tree, `.gitignore`, and runtime dependencies.
 - [x] Configure remote `origin` to `https://github.com/Fantom-1/Cross-Domain-Complaint-understanding-via-multilingual-Encoders.git` and establish `main` tracking branch.
 - [x] Verify live URLs, HTTP responses, license types, and schemas for candidate sources.
-- [ ] Implement deterministic acquisition script and immutable raw data storage with SHA-256 recording.
-- [ ] Create `dataset_inventory.csv` manifest.
-- [ ] Execute conservative normalization and MinHash deduplication.
-- [ ] Construct explicit `label_taxonomy.md` and `source_label_mapping.csv`.
-- [ ] Build canonical dataset (`canonical_dataset.parquet`) with unified schema.
-- [ ] Generate leakage-safe, group-stratified in-distribution split manifests.
-- [ ] Execute automated test suite for schema integrity, split exclusivity, and count reconciliation.
-- [ ] Author `dataset_card.md`, `data_preparation_methodology.md`, and `baseline_data_readiness.md`.
+- [x] Implement deterministic acquisition script and immutable raw data storage with SHA-256 recording.
+- [x] Create `dataset_inventory.csv` manifest.
+- [x] Execute conservative normalization and MinHash deduplication.
+- [x] Construct explicit `label_taxonomy.md` and `source_label_mapping.csv`.
+- [x] Build canonical dataset (`canonical_dataset.parquet`) with unified schema.
+- [x] Generate leakage-safe, group-stratified in-distribution split manifests.
+- [x] Execute automated test suite for schema integrity, split exclusivity, and count reconciliation.
+- [x] Author `dataset_card.md`, `data_preparation_methodology.md`, and `baseline_data_readiness.md`.
+
+---
+
+## 7. Known Gaps Deferred to Phase B
+
+| Gap | Description | Status |
+|---|---|---|
+| **Cross-domain split manifest** | `data/manifests/split_crossdomain.csv` pairing CFPB test rows with Banking77 queries for zero-shot domain transfer evaluation does not yet exist. Only `split_indomain.csv` is present. Cross-domain generalization — a core project claim — **cannot be evaluated until this manifest is created.** | **Phase B prerequisite** |
+| **Hindi/Hinglish complaint data** | No authentic Hindi/Hinglish consumer complaint narratives are available. COMI-LINGUA and MUTANT are code-mixed news/speech corpora, not complaint text. Multilingual evaluation requires dedicated human-annotated complaint data. | Pending external annotation |
+| **Reviewer label in `source_label_mapping.csv`** | All label decisions were made by an automated rule engine. The `reviewer` field was corrected from `"Automated Rule Engine (Reviewed)"` (misleadingly implying human sign-off) to `"automated_rule_engine"` in commit following Phase A audit. |  Corrected post-audit |
