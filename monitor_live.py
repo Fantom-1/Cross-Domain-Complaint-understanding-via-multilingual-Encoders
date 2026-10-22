@@ -34,17 +34,21 @@ def main():
     # 1. SLURM Queue
     run_cmd("SLURM QUEUE STATUS", "squeue -u abdul -o '%.8i %.9P %.18j %.8u %.2t %.10M %.6D %R'")
 
-    # 2. Latest Training Metrics & Progress
-    run_cmd("TRIAL 1 (LR=1e-5, Job 155) - LOGGED METRICS", 
-            "tail -n 20 /apps/cdcu/logs/slurm/cdcu-trial_lr1e5-155.out 2>/dev/null || echo 'Waiting for log...'")
+    # 2. Evaluation History for Current Trial (Job 156, LR=2e-5)
+    run_cmd("ACTIVE TRIAL 2 (Job 156) - ALL VALIDATION EVALUATION RESULTS", 
+            "grep 'eval_f1_macro' /apps/cdcu/logs/slurm/cdcu-trial_lr2e5-156.out 2>/dev/null || echo 'No eval steps yet.'")
 
-    # 3. Live Step Progress Bar & ETA
-    run_cmd("TRIAL 1 (LR=1e-5, Job 155) - LIVE STEP & ETA", 
-            "tail -n 15 /apps/cdcu/logs/slurm/cdcu-trial_lr1e5-155.err 2>/dev/null || echo 'No progress yet.'")
+    # 3. Live Progress Bar & Step Speed
+    run_cmd("ACTIVE TRIAL 2 (Job 156) - LIVE STEP PROGRESS & ETA", 
+            "tail -n 5 /apps/cdcu/logs/slurm/cdcu-trial_lr2e5-156.err 2>/dev/null || echo 'No progress output.'")
 
-    # 4. Checkpoints Saved
-    run_cmd("SAVED CHECKPOINTS", 
-            "ls -lh /apps/cdcu/runs/trial_lr1e5_155/trainer_output 2>/dev/null || echo 'First evaluation checkpoint at step 250.'")
+    # 4. Recent Training Loss & LR Logs
+    run_cmd("ACTIVE TRIAL 2 (Job 156) - RECENT TRAINING LOSS STEPS", 
+            "tail -n 12 /apps/cdcu/logs/slurm/cdcu-trial_lr2e5-156.out 2>/dev/null || echo 'Waiting for log...'")
+
+    # 5. Checkpoints Saved on Server
+    run_cmd("SAVED CHECKPOINTS ON SERVER", 
+            "ls -lhd /apps/cdcu/runs/*/trainer_output/checkpoint-* 2>/dev/null || ls -lh /apps/cdcu/runs/ 2>/dev/null")
 
     client.close()
 
