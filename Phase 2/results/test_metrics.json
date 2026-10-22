@@ -1,0 +1,59 @@
+{
+  "test_macro_f1": 0.5368602756224008,
+  "test_weighted_f1": 0.53395212946062,
+  "test_accuracy": 0.5325452422650321,
+  "num_test_samples": 6852,
+  "num_classes": 16,
+  "top_confusions": [
+    {
+      "gold": "debt_threats",
+      "predicted": "debt_not_owed",
+      "count": 112
+    },
+    {
+      "gold": "transaction_problem",
+      "predicted": "funds_availability",
+      "count": 100
+    },
+    {
+      "gold": "reporting_investigation_dispute",
+      "predicted": "reporting_incorrect_information",
+      "count": 95
+    },
+    {
+      "gold": "debt_communication",
+      "predicted": "debt_not_owed",
+      "count": 92
+    },
+    {
+      "gold": "reporting_incorrect_information",
+      "predicted": "reporting_investigation_dispute",
+      "count": 90
+    },
+    {
+      "gold": "debt_not_owed",
+      "predicted": "debt_threats",
+      "count": 86
+    },
+    {
+      "gold": "funds_availability",
+      "predicted": "account_management",
+      "count": 85
+    },
+    {
+      "gold": "debt_threats",
+      "predicted": "debt_communication",
+      "count": 82
+    },
+    {
+      "gold": "debt_not_owed",
+      "predicted": "debt_communication",
+      "count": 65
+    },
+    {
+      "gold": "debt_communication",
+      "predicted": "debt_threats",
+      "count": 65
+    }
+  ]
+}

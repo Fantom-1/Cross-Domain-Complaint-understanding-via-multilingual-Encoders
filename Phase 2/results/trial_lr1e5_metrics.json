@@ -1,0 +1,29 @@
+{
+  "train": {
+    "train_runtime": 9005.4657,
+    "train_samples_per_second": 10.667,
+    "train_steps_per_second": 1.334,
+    "total_flos": 5716884312836352.0,
+    "train_loss": 13.47349359399721,
+    "epoch": 3.0
+  },
+  "validation": {
+    "validation_loss": 1.4874138832092285,
+    "validation_f1_macro": 0.5141515470783955,
+    "validation_accuracy": 0.5129889083479277,
+    "validation_runtime": 4.9775,
+    "validation_samples_per_second": 1376.605,
+    "validation_steps_per_second": 86.188,
+    "epoch": 3.0
+  },
+  "test_evaluated": false,
+  "peak_vram_allocated_bytes": 15595360256,
+  "peak_vram_reserved_bytes": 15799943168,
+  "gpu_name": "NVIDIA RTX PRO 6000 Blackwell Server Edition MIG 1g.24gb",
+  "rows": {
+    "train": 32019,
+    "validation": 6852,
+    "test": 6852
+  },
+  "config_sha256": "3b40578306b5fe6c3343720a5b9c9565d0192646aa198e49c6fefce1b0788e25"
+}

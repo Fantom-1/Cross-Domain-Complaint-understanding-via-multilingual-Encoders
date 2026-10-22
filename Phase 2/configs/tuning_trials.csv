@@ -1,3 +1,3 @@
 trial_id,learning_rate,seed,max_length,micro_batch,gradient_accumulation_steps,precision,gradient_checkpointing,epochs,selection_metric,status,slurm_job_id,validation_macro_f1,peak_vram_gb,elapsed_seconds,config_sha256,notes
-lr_1e5,0.00001,42,128,1,8,bf16,true,3,f1_macro,running,155,,,,Trial 1 submitted
-lr_2e5,0.00002,42,128,1,8,bf16,true,3,f1_macro,queued_afterok,156,,,,Trial 2 chained after Trial 1
+lr_1e5,0.00001,42,128,1,8,bf16,true,3,f1_macro,completed,155,0.5142,15.6,9005,3b40578306b5fe6c3343720a5b9c9565d0192646aa198e49c6fefce1b0788e25,Val accuracy: 0.5130
+lr_2e5,0.00002,42,128,1,8,bf16,true,3,f1_macro,completed_selected,156,0.5339,15.6,9012,2be021629dff5ec7c3eb88ad2ca7b587a8ff1786ceb5f541e21b190f8ce9d08e,Selected winner: Test Macro-F1=0.5369 Test Acc=0.5325
