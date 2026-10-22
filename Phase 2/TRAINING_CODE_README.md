@@ -1,4 +1,4 @@
-# Included Trainer — Review Before Cluster Use
+# Included Trainer - Review Before Cluster Use
 
 `src/training/train_baseline.py` is a scaffold to accelerate implementation, not a claim that it has run successfully against the user's local data or cluster. Before use:
 

@@ -1,4 +1,4 @@
-# START HERE — Complaint Baseline Tuning Pack
+# START HERE - Complaint Baseline Tuning Pack
 
 This pack is for an agent who starts with no context. Read the following in order:
 

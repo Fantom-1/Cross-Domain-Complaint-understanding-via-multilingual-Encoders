@@ -3,7 +3,7 @@
 **Project**: Cross-Domain Complaint Understanding via Multilingual Encoders  
 **Model**: `facebook/xlm-v-base` (Sequence Classification, 16 Intent Classes)  
 **Execution Date**: October 22, 2026  
-**Status**: All Gates Passed — Tuning & Test Evaluation Complete  
+**Status**: All Gates Passed - Tuning & Test Evaluation Complete  
 
 ---
 

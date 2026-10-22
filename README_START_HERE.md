@@ -1,4 +1,4 @@
-# Complaint Understanding — Agent Instruction Pack
+# Complaint Understanding - Agent Instruction Pack
 
 Read in this order: `SYSTEM.md`, `PROJECT_BRIEF.md`, `DATA_SOURCES.md`, `DATA_PREPARATION_SPEC.md`, `BASELINE_TRAINING_EVALUATION.md`, `DELIVERABLES_AND_CHECKLIST.md`, `REFERENCES.md`.
 
