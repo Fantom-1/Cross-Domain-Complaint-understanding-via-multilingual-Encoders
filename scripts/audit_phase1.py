@@ -6,14 +6,15 @@ Gating Invariants:
 2. Manifest Schema & Content Invariants: verifies exact 20 columns in dataset_inventory.csv (25 entries)
    and exact 15 columns in release_overlap_report.csv (24 entries).
 3. Observed vs Unverified Distinction: verifies that observed properties are asserted only for inspected files,
-   while unfetched releases are explicitly marked unverified/unmeasured.
+   while ALL 20 unfetched releases (including CCDB_Export_21) are strictly verified to be marked unverified/unmeasured.
 4. Temporal Contiguity Invariant: proves that the 21 CFPB FOIA export windows
    connect day-to-day from 2011-12-01 to 2026-08-14 with zero temporal gaps.
-5. Schema Discrepancy Invariant: verifies that active bulk complaints (complaints.csv.zip) lacks narratives (15 cols)
+5. Snapshot Provenance Consistency: verifies that snapshot release and retrieval dates are aligned (e.g. 2026-10-21 for bulk feed).
+6. Schema Discrepancy Invariant: verifies that active bulk complaints (complaints.csv.zip) lacks narratives (15 cols)
    while baseline FOIA archive contains narratives (16 cols).
-6. Cryptographic Checksums: verifies SHA-256 for all locally cached raw files.
-7. Test Suite Execution: runs tests/data/test_phase1_provenance.py and tests/data/test_data_integrity.py.
-8. Emits auditable snapshot docs/phase1_provenance_audit.md.
+7. Cryptographic Checksums: verifies SHA-256 for all locally cached raw files.
+8. Test Suite Execution: runs tests/data/test_phase1_provenance.py and tests/data/test_data_integrity.py.
+9. Emits auditable snapshot docs/phase1_provenance_audit.md.
 """
 
 import csv
@@ -124,6 +125,19 @@ def run_audit():
             inv_rows = list(dict_r)
             if len(inv_rows) != 25:
                 inventory_errors.append(f"Expected 25 entries in dataset_inventory.csv, found {len(inv_rows)}")
+            
+            # Check date consistency on bulk feed
+            bulk_rows = [r for r in inv_rows if "Active Daily Feed" in r["source_dataset"]]
+            if bulk_rows:
+                br = bulk_rows[0]
+                if br["release_date"] != br["retrieval_date"]:
+                    inventory_errors.append(f"Bulk feed snapshot dates inconsistent: release_date={br['release_date']} vs retrieval_date={br['retrieval_date']}")
+            
+            # Check narrative license status
+            foia_inv = [r for r in inv_rows if "FOIA" in r["source_dataset"]]
+            for r in foia_inv:
+                if "needs_verification" not in r["license"]:
+                    inventory_errors.append(f"FOIA archive {r['file_name']} missing 'needs_verification' in license field: {r['license']}")
     else:
         inventory_errors.append(f"Missing {INVENTORY_CSV}")
 
@@ -145,24 +159,34 @@ def run_audit():
             if len(overlap_rows) != 24:
                 overlap_errors.append(f"Expected 24 entries in release_overlap_report.csv, found {len(overlap_rows)}")
             
-            # Check contiguity
             foia_entries = [r for r in overlap_rows if r["release_id"].startswith("CCDB_Export_")]
             foia_entries = sorted(foia_entries, key=lambda x: x["release_id"])
             if len(foia_entries) != 21:
                 overlap_errors.append(f"Expected 21 FOIA entries in overlap report, got {len(foia_entries)}")
             else:
+                # 4a. Decoupled contiguity loop across consecutive pairs (0 to 19)
                 for i in range(len(foia_entries) - 1):
                     d_end = datetime.datetime.strptime(foia_entries[i]["window_end_date"], "%Y-%m-%d")
                     d_start_next = datetime.datetime.strptime(foia_entries[i+1]["window_start_date"], "%Y-%m-%d")
                     diff = (d_start_next - d_end).days
                     if diff != 1:
                         overlap_errors.append(f"Contiguity failure between {foia_entries[i]['release_id']} and {foia_entries[i+1]['release_id']}: {diff} days")
-                    
-                    # Overlap with export 2 check: enforce unmeasured designation for unfetched
-                    rel_id = foia_entries[i]["release_id"]
-                    if rel_id != "CCDB_Export_02":
-                        if foia_entries[i]["export2_id_overlap_count"] != "unmeasured_unfetched":
-                            overlap_errors.append(f"Expected 'unmeasured_unfetched' for unfetched {rel_id}, got {foia_entries[i]['export2_id_overlap_count']}")
+                
+                # 4b. Independent validation loop across ALL 21 FOIA releases (including CCDB_Export_21)
+                for entry in foia_entries:
+                    rel_id = entry["release_id"]
+                    if rel_id == "CCDB_Export_02":
+                        if "1041632" not in entry["export2_id_overlap_count"]:
+                            overlap_errors.append(f"Expected measured count in CCDB_Export_02, got {entry['export2_id_overlap_count']}")
+                        if entry["column_count"] != "16 (observed)":
+                            overlap_errors.append(f"Expected '16 (observed)' for CCDB_Export_02, got {entry['column_count']}")
+                    else:
+                        if entry["export2_id_overlap_count"] != "unmeasured_unfetched":
+                            overlap_errors.append(f"Expected 'unmeasured_unfetched' for {rel_id}, got {entry['export2_id_overlap_count']}")
+                        if entry["column_count"] != "unverified_unfetched":
+                            overlap_errors.append(f"Expected 'unverified_unfetched' for {rel_id}, got {entry['column_count']}")
+                        if entry["has_narratives"] != "reported_unverified":
+                            overlap_errors.append(f"Expected 'reported_unverified' for {rel_id}, got {entry['has_narratives']}")
     else:
         overlap_errors.append(f"Missing {OVERLAP_CSV}")
 
@@ -228,7 +252,7 @@ def run_audit():
 | **Storage & Preflight** | Workspace volume capacity >= 15 GB | {"PASS" if storage_passed else "FAIL"} | {free_gb:.2f} GB free |
 | **Required Deliverables** | Presence of manifests and governance docs | {"PASS" if files_exist else "FAIL"} | Manifests and docs verified |
 | **Inventory Manifest** | 20-column schema & 25 entries in `dataset_inventory.csv` | {"PASS" if inventory_passed else "FAIL"} | {len(inv_rows)} entries, {len(inventory_errors)} errors |
-| **Overlap & Contiguity** | 15-column schema, 24 entries, strict 1-day contiguity, unmeasured designation | {"PASS" if overlap_passed else "FAIL"} | {len(overlap_rows)} entries, {len(overlap_errors)} errors |
+| **Overlap & Contiguity** | 15-column schema, 24 entries, strict 1-day contiguity, unmeasured designation across ALL 21 exports | {"PASS" if overlap_passed else "FAIL"} | {len(overlap_rows)} entries, {len(overlap_errors)} errors |
 | **Cryptographic Hashes** | SHA-256 verification of cached baseline archives | {"PASS" if hashes_passed else "FAIL"} | {len(EXPECTED_LOCAL_HASHES)} files verified, {len(hash_errors)} errors |
 | **Automated Test Suite** | Execution of `test_phase1_provenance` & `test_data_integrity` | {"PASS" if tests_passed else "FAIL"} | {test_result.testsRun} tests passed in test suite |
 
@@ -237,8 +261,8 @@ def run_audit():
 ## 2. Invariant Checklist
 
 - {check_box(storage_passed)} **Storage Buffer:** Sufficient workspace capacity verified ({free_gb:.2f} GB available).
-- {check_box(inventory_passed)} **Official Source Catalog:** Complete enumeration of all 21 CFPB FOIA narrative archive windows.
-- {check_box(overlap_passed)} **Observed vs Unverified Separation:** Empirical properties strictly separated from unverified remote fields.
+- {check_box(inventory_passed)} **Official Source Catalog:** Complete enumeration of all 21 CFPB FOIA narrative archive windows with aligned snapshot dates.
+- {check_box(overlap_passed)} **Observed vs Unverified Separation:** Empirical properties strictly separated from unverified remote fields across all 21 exports.
 - {check_box(hashes_passed)} **Immutable Baseline Integrity:** Cryptographic SHA-256 check matches `CCDB_Export_2` reference snapshot.
 - {check_box(tests_passed)} **Unit Test Compliance:** Full automated test suite passes with 0 failures and 0 errors.
 
@@ -247,8 +271,8 @@ def run_audit():
 ## 3. Detailed Inspection Logs
 
 ### Manifest Summary
-* **`data/manifests/dataset_inventory.csv`**: {len(inv_rows)} cataloged assets across CFPB FOIA reading room (21), active bulk feed (1), and BANKING77 (3).
-* **`data/manifests/release_overlap_report.csv`**: 24 comparative releases documenting temporal duration, observed vs unverified column counts, narrative presence, and unmeasured ID overlap status.
+* **`data/manifests/dataset_inventory.csv`**: {len(inv_rows)} cataloged assets across CFPB FOIA reading room (21), active bulk feed (1), and BANKING77 (3). Narrative licensing marked `needs_verification`. Bulk feed snapshot dates aligned to 2026-10-21.
+* **`data/manifests/release_overlap_report.csv`**: 24 comparative releases documenting temporal duration, observed vs unverified column counts, narrative presence, and unmeasured ID overlap status for all 20 unfetched archives.
 * **`docs/source_terms_and_provenance.md`**: Legal terms of use, 5 U.S.C. § 552 FOIA reading room authority, 80 FR 15572 opt-in consumer consent disclosures, and August 14, 2026 policy change documentation.
 
 ### Test Results

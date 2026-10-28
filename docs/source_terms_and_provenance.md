@@ -136,7 +136,7 @@ $$W_i \cap W_j = \emptyset \quad \forall i \neq j$$
 ### 5.2 Empirical Record-ID Overlap Status
 In response to review feedback, we explicitly distinguish temporal non-overlap from empirical record-ID measurement:
 1. **Unfetched Archives (`CCDB_Export_01`, `03`–`21`):** While calendar windows are disjoint, empirical record-ID comparison has not been executed because the raw files remain unfetched to preserve local disk budget. Therefore, `export2_id_overlap_count` is formally designated **`unmeasured_unfetched`**.
-2. **Active Bulk File (`complaints.csv.zip`):** Empirically sampled and confirmed to contain baseline Export 2 complaint IDs (e.g., ID `3109824`), confirming its role as a full-database metadata superset.
+2. **Active Bulk File (`complaints.csv.zip`):** Empirically sampled and confirmed to contain baseline Export 2 complaint IDs (e.g., ID `3109824`), confirming its role as a full-database metadata superset. Documented as the 2026-10-21 snapshot (aligned with its retrieval date 2026-10-21, 356,704,969 bytes, and verified SHA-256 checksum `9ae94df79f...`).
 3. **BANKING77:** Completely disjoint benchmark; 0 record ID overlap.
 
 ---
