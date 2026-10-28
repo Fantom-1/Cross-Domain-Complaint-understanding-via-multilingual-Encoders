@@ -5,13 +5,15 @@ Gating Invariants:
 1. Environment & Storage Preflight: confirms workspace volume and >=15 GB free space for safe operation.
 2. Manifest Schema & Content Invariants: verifies exact 20 columns in dataset_inventory.csv (25 entries)
    and exact 15 columns in release_overlap_report.csv (24 entries).
-3. Temporal Contiguity & Zero Overlap Invariants: proves that the 21 CFPB FOIA export windows
-   connect day-to-day from 2011-12-01 to 2026-08-14 with zero gaps and zero overlap with baseline snapshot.
-4. Schema Discrepancy Invariant: verifies that active bulk complaints (complaints.csv.zip) lacks narratives (15 cols)
-   while FOIA archives contain narratives (16 cols).
-5. Cryptographic Checksums: verifies SHA-256 for all locally cached raw files.
-6. Test Suite Execution: runs tests/data/test_phase1_provenance.py and tests/data/test_data_integrity.py.
-7. Emits auditable snapshot docs/phase1_provenance_audit.md.
+3. Observed vs Unverified Distinction: verifies that observed properties are asserted only for inspected files,
+   while unfetched releases are explicitly marked unverified/unmeasured.
+4. Temporal Contiguity Invariant: proves that the 21 CFPB FOIA export windows
+   connect day-to-day from 2011-12-01 to 2026-08-14 with zero temporal gaps.
+5. Schema Discrepancy Invariant: verifies that active bulk complaints (complaints.csv.zip) lacks narratives (15 cols)
+   while baseline FOIA archive contains narratives (16 cols).
+6. Cryptographic Checksums: verifies SHA-256 for all locally cached raw files.
+7. Test Suite Execution: runs tests/data/test_phase1_provenance.py and tests/data/test_data_integrity.py.
+8. Emits auditable snapshot docs/phase1_provenance_audit.md.
 """
 
 import csv
@@ -113,8 +115,6 @@ def run_audit():
     inv_rows = []
     if os.path.exists(INVENTORY_CSV):
         with open(INVENTORY_CSV, "r", encoding="utf-8") as f:
-            reader = csv.DictWriter(f, fieldnames=[])  # check header
-            f.seek(0)
             csv_r = csv.reader(f)
             header = next(csv_r)
             if header != REQUIRED_INVENTORY_COLUMNS:
@@ -158,10 +158,11 @@ def run_audit():
                     if diff != 1:
                         overlap_errors.append(f"Contiguity failure between {foia_entries[i]['release_id']} and {foia_entries[i+1]['release_id']}: {diff} days")
                     
-                    # Overlap with export 2 check
-                    if foia_entries[i]["release_id"] != "CCDB_Export_02":
-                        if int(foia_entries[i]["export2_id_overlap_count"]) != 0:
-                            overlap_errors.append(f"Non-zero overlap in {foia_entries[i]['release_id']}")
+                    # Overlap with export 2 check: enforce unmeasured designation for unfetched
+                    rel_id = foia_entries[i]["release_id"]
+                    if rel_id != "CCDB_Export_02":
+                        if foia_entries[i]["export2_id_overlap_count"] != "unmeasured_unfetched":
+                            overlap_errors.append(f"Expected 'unmeasured_unfetched' for unfetched {rel_id}, got {foia_entries[i]['export2_id_overlap_count']}")
     else:
         overlap_errors.append(f"Missing {OVERLAP_CSV}")
 
@@ -186,7 +187,6 @@ def run_audit():
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     
-    # Load Phase 1 provenance tests
     suite_p1 = loader.discover(os.path.join(REPO_ROOT, "tests", "data"), pattern="test_phase1_provenance.py")
     suite_data = loader.discover(os.path.join(REPO_ROOT, "tests", "data"), pattern="test_data_integrity.py")
     suite.addTests(suite_p1)
@@ -228,7 +228,7 @@ def run_audit():
 | **Storage & Preflight** | Workspace volume capacity >= 15 GB | {"PASS" if storage_passed else "FAIL"} | {free_gb:.2f} GB free |
 | **Required Deliverables** | Presence of manifests and governance docs | {"PASS" if files_exist else "FAIL"} | Manifests and docs verified |
 | **Inventory Manifest** | 20-column schema & 25 entries in `dataset_inventory.csv` | {"PASS" if inventory_passed else "FAIL"} | {len(inv_rows)} entries, {len(inventory_errors)} errors |
-| **Overlap & Contiguity** | 15-column schema, 24 entries, strict 1-day contiguity | {"PASS" if overlap_passed else "FAIL"} | {len(overlap_rows)} entries, {len(overlap_errors)} errors |
+| **Overlap & Contiguity** | 15-column schema, 24 entries, strict 1-day contiguity, unmeasured designation | {"PASS" if overlap_passed else "FAIL"} | {len(overlap_rows)} entries, {len(overlap_errors)} errors |
 | **Cryptographic Hashes** | SHA-256 verification of cached baseline archives | {"PASS" if hashes_passed else "FAIL"} | {len(EXPECTED_LOCAL_HASHES)} files verified, {len(hash_errors)} errors |
 | **Automated Test Suite** | Execution of `test_phase1_provenance` & `test_data_integrity` | {"PASS" if tests_passed else "FAIL"} | {test_result.testsRun} tests passed in test suite |
 
@@ -238,7 +238,7 @@ def run_audit():
 
 - {check_box(storage_passed)} **Storage Buffer:** Sufficient workspace capacity verified ({free_gb:.2f} GB available).
 - {check_box(inventory_passed)} **Official Source Catalog:** Complete enumeration of all 21 CFPB FOIA narrative archive windows.
-- {check_box(overlap_passed)} **Mathematical Partition Proof:** Contiguous date coverage (2011-12-01 to 2026-08-14) with zero pairwise ID overlap against baseline.
+- {check_box(overlap_passed)} **Observed vs Unverified Separation:** Empirical properties strictly separated from unverified remote fields.
 - {check_box(hashes_passed)} **Immutable Baseline Integrity:** Cryptographic SHA-256 check matches `CCDB_Export_2` reference snapshot.
 - {check_box(tests_passed)} **Unit Test Compliance:** Full automated test suite passes with 0 failures and 0 errors.
 
@@ -248,8 +248,8 @@ def run_audit():
 
 ### Manifest Summary
 * **`data/manifests/dataset_inventory.csv`**: {len(inv_rows)} cataloged assets across CFPB FOIA reading room (21), active bulk feed (1), and BANKING77 (3).
-* **`data/manifests/release_overlap_report.csv`**: 24 comparative releases documenting temporal duration, column counts, narrative presence, and zero overlap.
-* **`docs/source_terms_and_provenance.md`**: Legal terms of use, 5 U.S.C. § 552 FOIA reading room authority, 17 U.S.C. § 105 public domain status, and August 14, 2026 policy change documentation.
+* **`data/manifests/release_overlap_report.csv`**: 24 comparative releases documenting temporal duration, observed vs unverified column counts, narrative presence, and unmeasured ID overlap status.
+* **`docs/source_terms_and_provenance.md`**: Legal terms of use, 5 U.S.C. § 552 FOIA reading room authority, 80 FR 15572 opt-in consumer consent disclosures, and August 14, 2026 policy change documentation.
 
 ### Test Results
 * Ran {test_result.testsRun} automated test cases across `tests/data/test_phase1_provenance.py` and `tests/data/test_data_integrity.py`.
