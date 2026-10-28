@@ -337,7 +337,8 @@ def run_phase0_audit():
         "data/processed/baseline_train.csv",
         "data/processed/baseline_validation.csv",
         "data/processed/baseline_test.csv",
-        "data/processed/label_map.json"
+        "data/processed/label_map.json",
+        "data/manifests/split_indomain.csv"
     ]
     missing_baseline = [f for f in required_baseline_files if not os.path.exists(os.path.join(ROOT_DIR, f))]
     
@@ -351,7 +352,7 @@ def run_phase0_audit():
 ### Missing Required Baseline Artifacts:
 {chr(10).join(f"- `{f}`" for f in missing_baseline)}
 
-Cannot complete baseline profiling because mandatory artifacts are missing from `data/processed/`.
+Cannot complete baseline profiling because mandatory artifacts are missing from repository.
 Please restore or acquire these baseline files before proceeding.
 """
         with open(os.path.join(ROOT_DIR, "docs/baseline_snapshot_inventory.md"), "w", encoding="utf-8") as f:
@@ -364,6 +365,7 @@ Please restore or acquire these baseline files before proceeding.
         df_train = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_train.csv"))
         df_val = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_validation.csv"))
         df_test = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_test.csv"))
+        df_manifest = pd.read_csv(os.path.join(ROOT_DIR, "data/manifests/split_indomain.csv"))
     except Exception as e:
         print(f"CRITICAL ERROR: Failed to parse required baseline datasets: {e}")
         blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
@@ -383,6 +385,7 @@ Execution halted because a required baseline file failed schema ingestion.
     # 3.1 Validate required columns & non-nullness explicitly before indexing (Finding 1)
     REQUIRED_CANONICAL_INDEX_COLS = ["example_id", "text_normalized", "intent_label", "domain"]
     REQUIRED_SPLIT_INDEX_COLS = ["example_id", "label", "group_id"]
+    REQUIRED_MANIFEST_INDEX_COLS = ["example_id", "split", "group_id", "intent_label", "domain"]
     
     schema_failures = []
     for col in REQUIRED_CANONICAL_INDEX_COLS:
@@ -393,6 +396,10 @@ Execution halted because a required baseline file failed schema ingestion.
         for col in REQUIRED_SPLIT_INDEX_COLS:
             if col not in s_df.columns:
                 schema_failures.append(f"{s_name} missing required index column '{col}'")
+                
+    for col in REQUIRED_MANIFEST_INDEX_COLS:
+        if col not in df_manifest.columns:
+            schema_failures.append(f"split_indomain.csv missing required index column '{col}'")
                 
     if schema_failures:
         print(f"CRITICAL ERROR: Schema validation failed: {schema_failures}")
@@ -418,6 +425,9 @@ Execution halted because one or more datasets are missing mandatory index column
         if s_df["example_id"].isna().any(): null_key_failures.append(f"Null example_id in {s_name}")
         if s_df["group_id"].isna().any(): null_key_failures.append(f"Null group_id in {s_name}")
         if s_df["label"].isna().any(): null_key_failures.append(f"Null label in {s_name}")
+    if df_manifest["example_id"].isna().any(): null_key_failures.append("Null example_id in split_indomain.csv")
+    if df_manifest["group_id"].isna().any(): null_key_failures.append("Null group_id in split_indomain.csv")
+    if df_manifest["split"].isna().any(): null_key_failures.append("Null split in split_indomain.csv")
         
     if null_key_failures:
         print(f"CRITICAL ERROR: Null key identifiers detected: {null_key_failures}")
@@ -492,7 +502,33 @@ Execution halted because null key or grouping identifiers undermine set-based le
     reconciled = (sum_splits == canonical_len)
     status_reconciliation = "PASSED (Exact match)" if reconciled else f"FAILED (Sum: {sum_splits:,} != Canonical: {canonical_len:,})"
     
-    invariants_passed = (exclusivity_all_passed and leakage_all_passed and closed_set_passed and reconciled)
+    # 5.1 Split manifest reconciliation check (Validates split_indomain.csv against canonical and split CSVs)
+    manifest_id_match = (
+        len(df_manifest) == len(df_canonical) and 
+        df_manifest["example_id"].nunique() == len(df_manifest) and 
+        set(df_manifest["example_id"]) == set(df_canonical["example_id"])
+    )
+    
+    csv_splits = {}
+    for eid in df_train["example_id"]:
+        csv_splits[eid] = "train"
+    for eid in df_val["example_id"]:
+        csv_splits[eid] = "validation"
+    for eid in df_test["example_id"]:
+        csv_splits[eid] = "test"
+    manifest_splits = dict(zip(df_manifest["example_id"], df_manifest["split"]))
+    manifest_split_match = (csv_splits == manifest_splits)
+    
+    csv_groups = dict(zip(df_train["example_id"], df_train["group_id"]))
+    csv_groups.update(dict(zip(df_val["example_id"], df_val["group_id"])))
+    csv_groups.update(dict(zip(df_test["example_id"], df_test["group_id"])))
+    manifest_groups = dict(zip(df_manifest["example_id"], df_manifest["group_id"]))
+    manifest_group_match = (csv_groups == manifest_groups)
+    
+    manifest_reconciliation_passed = (manifest_id_match and manifest_split_match and manifest_group_match)
+    status_manifest_reconciliation = "PASSED (100% ID, Split, and Group Agreement)" if manifest_reconciliation_passed else f"FAILED (id_match={manifest_id_match}, split_match={manifest_split_match}, group_match={manifest_group_match})"
+
+    invariants_passed = (exclusivity_all_passed and leakage_all_passed and closed_set_passed and reconciled and manifest_reconciliation_passed)
 
     # 6. Environment & Git Hygiene Checks
     volumes = get_storage_volumes(ROOT_DIR)
@@ -599,6 +635,7 @@ Execution halted because null key or grouping identifiers undermine set-based le
 
 ### Gate Verification Status:
 * {check_box(invariants_passed)} **Partition Invariants:** {'PASSED' if invariants_passed else 'FAILED'}
+* {check_box(manifest_reconciliation_passed)} **Split Manifest Consistency (split_indomain.csv):** {'PASSED' if manifest_reconciliation_passed else 'FAILED'}
 * {check_box(test_suite_passed)} **Data Integrity Test Suite:** {'PASSED' if test_suite_passed else 'FAILED'}
 * {check_box(smoke_all_passed)} **Environment & Library Smoke Tests:** {'PASSED' if smoke_all_passed else 'FAILED'}
 * {check_box(gitignore_hygiene_passed)} **Git Hygiene Rules (.gitignore):** {'PASSED' if gitignore_hygiene_passed else 'FAILED'}
@@ -645,6 +682,11 @@ Execution halted because null key or grouping identifiers undermine set-based le
      * Test labels missing from Train: {len(test_missing_from_train)} — **{status_closed_set_te}**
    * **Row Count Reconciliation:**
      * Train ({len(df_train):,}) + Val ({len(df_val):,}) + Test ({len(df_test):,}) = {sum_splits:,} vs Canonical Parquet {canonical_len:,} — **{status_reconciliation}**
+   * **Split Manifest Consistency (`split_indomain.csv`):**
+     * Exact ID set equality with canonical ({len(df_manifest):,} records): **{'PASSED (Exact match)' if manifest_id_match else 'FAILED'}**
+     * Split assignment agreement with CSVs (train/val/test): **{'PASSED (100% agreement)' if manifest_split_match else 'FAILED'}**
+     * Group ID agreement with CSVs: **{'PASSED (100% agreement)' if manifest_group_match else 'FAILED'}**
+     * Overall Manifest Status: **{status_manifest_reconciliation}**
 
 ### B. Historical Repository Claims (Unverified Baseline Context):
 The following figures represent **prior repository reports from earlier training runs**, not independently re-trained or reproduced results in this phase:

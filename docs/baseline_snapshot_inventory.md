@@ -28,6 +28,7 @@
 
 ### Gate Verification Status:
 * [x] **Partition Invariants:** PASSED
+* [x] **Split Manifest Consistency (split_indomain.csv):** PASSED
 * [x] **Data Integrity Test Suite:** PASSED
 * [x] **Environment & Library Smoke Tests:** PASSED
 * [x] **Git Hygiene Rules (.gitignore):** PASSED
@@ -56,10 +57,10 @@
 ### A. Properties Empirically Verified by Current Audit:
 1. **Programmatic Test Execution:**  
    The integrity test suite (`tests/data/test_data_integrity.py`) was executed programmatically during this audit run:
-   * **Tests executed:** 9
+   * **Tests executed:** 10
    * **Failures:** 0
    * **Errors:** 0
-   * **Test Suite Result:** PASSED (All 9 tests succeeded)
+   * **Test Suite Result:** PASSED (All 10 tests succeeded)
 2. **Mathematical Partition Invariants (Independently Computed & Dynamically Derived):**
    * **Example ID Exclusivity:**
      * Train $\cap$ Val: 0 overlapping IDs — **PASSED**
@@ -74,6 +75,11 @@
      * Test labels missing from Train: 0 — **PASSED**
    * **Row Count Reconciliation:**
      * Train (32,019) + Val (6,852) + Test (6,852) = 45,723 vs Canonical Parquet 45,723 — **PASSED (Exact match)**
+   * **Split Manifest Consistency (`split_indomain.csv`):**
+     * Exact ID set equality with canonical (45,723 records): **PASSED (Exact match)**
+     * Split assignment agreement with CSVs (train/val/test): **PASSED (100% agreement)**
+     * Group ID agreement with CSVs: **PASSED (100% agreement)**
+     * Overall Manifest Status: **PASSED (100% ID, Split, and Group Agreement)**
 
 ### B. Historical Repository Claims (Unverified Baseline Context):
 The following figures represent **prior repository reports from earlier training runs**, not independently re-trained or reproduced results in this phase:
