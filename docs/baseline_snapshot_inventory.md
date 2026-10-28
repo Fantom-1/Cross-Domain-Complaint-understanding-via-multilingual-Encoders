@@ -1,22 +1,37 @@
-# Baseline Snapshot Inventory (May 2018–April 2021 Reference Release)
+# Baseline Snapshot Inventory — Captured Local Execution Snapshot
 
 **Audit Date:** 2026-10-28  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Scope:** Preserved reference baseline snapshot files, checksums, and empirical profile metrics.  
 **Retention Policy:** Strictly immutable reference baseline release. Preserved as a historical benchmark.
 
+> [!NOTE]
+> **Document Status: Captured Local Execution Snapshot**  
+> This artifact represents a local audit snapshot generated on the developer workstation by executing:
+> ```powershell
+> mamba run -p D:\NLP\env python scripts/audit_phase0.py
+> mamba run -p D:\NLP\env python -m unittest tests/data/test_data_integrity.py
+> ```
+> All invariants and tests are dynamically evaluated from local disk artifacts during execution.
+
 ---
 
-## 1. Executive Summary
-
-This inventory documents the pre-existing reference baseline dataset generated from the CFPB historical export (May 2018 through April 2021). The dataset was used to establish the initial repository baseline benchmark (`facebook/xlm-v-base` 16-class classification).
+## 1. Executive Summary & Gating Decision
 
 * **Total Canonical Narratives:** 45,723 records
 * **Partition Split:** 32,019 train (70.0%) / 6,852 validation (15.0%) / 6,852 test (15.0%)
 * **Intent Classes:** 16 classes mapped deterministically from CFPB administrative `Issue` and `Sub-issue` fields
 * **Normalized Product Domains:** 9 financial domains
-* **Audit Scope Status:** 27 of 27 target artifacts inspected (0 missing optional)
-* **Overall Audit Verdict:** **Empirically Verified & Reconciled (100% Invariants Passed)**
+* **Audit Scope:** 27 of 27 target artifacts inspected (0 optional missing)
+* **Metadata Inspection Errors:** 0 errors
+* **Multi-Pillar Audit Verdict:** **PASSED (100% Invariants, Test Suite, Environment & Hygiene Checks Verified)**
+
+### Gate Verification Status:
+* [x] **Partition Invariants:** PASSED
+* [x] **Data Integrity Test Suite:** PASSED
+* [x] **Environment & Library Smoke Tests:** PASSED
+* [x] **Git Hygiene Rules (.gitignore):** PASSED
+* [x] **Metadata Inspection Integrity:** PASSED
 
 ---
 
@@ -32,13 +47,11 @@ This inventory documents the pre-existing reference baseline dataset generated f
 | `data/manifests/split_indomain.csv` | CSV | 7,463,620 | 7.12 | 45,723 | 10 | `cd84fdb294b8ea8caa7da7e532a796bc78da99013d298f36f8e32c6a1c2c2f20` |
 
 > [!NOTE]
-> All row and column counts above are dynamically read from disk using RFC 4180 CSV-aware record parsing and Parquet metadata inspect, resolving previous reporting discrepancies.
+> All row and column counts above are dynamically read from disk using RFC 4180 CSV-aware record parsing and Parquet metadata inspect.
 
 ---
 
 ## 3. Independent Verification vs. Historical Repository Claims
-
-To ensure complete empirical clarity, this audit explicitly distinguishes between properties verified directly on the disk artifacts during this run versus historical benchmark claims reported by prior phases.
 
 ### A. Properties Empirically Verified by Current Audit:
 1. **Programmatic Test Execution:**  

@@ -1,9 +1,17 @@
-# Environment and Storage Pre-Flight Check (Cross-Platform & Dynamically Verified)
+# Environment and Storage Pre-Flight Check — Captured Local Audit Snapshot
 
 **Audit Date:** 2026-10-28  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Workspace Root:** `D:\NLP`  
 **Git Branch:** `DATA_PREPARATION` (Tracking: `origin/DATA_PREPARATION`)
+
+> [!NOTE]
+> **Document Status: Captured Local Workstation Execution Snapshot**  
+> This artifact represents a local audit snapshot dynamically generated on the developer workstation. In accordance with the Phase 0 data protocol, reproducibility evidence can be regenerated locally using the following commands:
+> ```powershell
+> mamba run -p D:\NLP\env python scripts/audit_phase0.py
+> mamba run -p D:\NLP\env python -m unittest tests/data/test_data_integrity.py
+> ```
 
 ---
 
@@ -12,7 +20,7 @@
 | Volume Label | Mount / Root Path | Total Capacity | Used Space | Free Space | Free % | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | Workspace Volume (D:) | `D:\NLP` | 200.00 GB | 165.98 GB | 34.02 GB | 17.0% | **Adequate Headroom** |
-| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.75 GB | 29.96 GB | 10.9% | **Adequate Headroom** |
+| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.76 GB | 29.95 GB | 10.9% | **Adequate Headroom** |
 
 ### Storage Budget Analysis:
 1. **Existing Raw Data:**
@@ -57,13 +65,13 @@
 
 ## 3. Git Hygiene and Exclusion Rules (Dynamically Inspected from `.gitignore`)
 
-| Pattern Rule | Description | Found in `.gitignore` | Line Number |
-| :--- | :--- | :---: | :---: |
-| `env/` | Environment isolation | Yes | Line 17 |
-| `/data/raw/` | Raw data exclusion | Yes | Line 2 |
-| `/data/interim/` | Interim data exclusion | Yes | Line 3 |
-| `/data/processed/` | Processed data exclusion | Yes | Line 4 |
-| `!/data/manifests/` | Manifest tracking exemption | Yes | Line 5 |
+| Pattern Rule | Description | Found in `.gitignore` | Line Number | Status |
+| :--- | :--- | :---: | :---: | :---: |
+| `env/` | Environment isolation | Yes | Line 17 | **PASSED** |
+| `/data/raw/` | Raw data exclusion | Yes | Line 2 | **PASSED** |
+| `/data/interim/` | Interim data exclusion | Yes | Line 3 | **PASSED** |
+| `/data/processed/` | Processed data exclusion | Yes | Line 4 | **PASSED** |
+| `!/data/manifests/` | Manifest tracking exemption | Yes | Line 5 | **PASSED** |
 
 ---
 

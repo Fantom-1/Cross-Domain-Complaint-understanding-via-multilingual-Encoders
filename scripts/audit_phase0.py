@@ -1,13 +1,19 @@
-"""Phase 0 Audit and Inventory Generator (Fully Hardened, Dynamic & Gated).
+"""Phase 0 Audit and Inventory Generator (Comprehensive Multi-Pillar Gating).
 
-Enforces strict empirical verification for PR #1:
-1. Programmatically executes tests/data/test_data_integrity.py and strictly gates the audit outcome.
-2. Derives all invariant status labels dynamically from computed data (zero hardcoded PASSED labels).
-3. Dynamically queries Git branch/tracking, performs live library smoke test imports, and parses .gitignore.
-4. Wraps all dataset ingestion in structured exception handling, producing explicit BLOCKED reports on failure.
-5. Employs RFC 4180 CSV-aware record counting (csv.reader) to correctly handle multiline quoted fields.
-6. Discovers mount/volume storage quotas dynamically without hardcoding OS-specific drive letters.
-7. Reconciles domain counts (9) and column counts (18 canonical, 10 split manifest) against disk files.
+Addresses follow-up review comments on PR #1:
+1. Multi-Pillar Audit Gating: Evaluates and gates on ALL reported checks:
+   - Partition invariants (exclusivity, group leakage, closed-set, reconciliation)
+   - Programmatic integrity test suite execution
+   - In-memory library smoke test imports
+   - Git hygiene (.gitignore rule presence)
+   - Metadata inspection diagnostics (zero corruptions/inspect failures)
+2. Robust Archive & Metadata Handling:
+   - inspect_zip() safely catches zipfile exceptions and returns error tuples without formatting crashes.
+   - inspect_tabular() catches format errors safely and tracks errors in metadata_inspection_errors.
+3. Explicit Local Snapshot Attribution:
+   - Labels environment & inventory reports as "Captured Local Execution Snapshots" with local reproduction steps.
+4. Scope Discipline:
+   - Removed ad-hoc check_pr.py helper script to maintain strict Phase 0 boundaries.
 """
 
 import os
@@ -70,6 +76,7 @@ def inspect_tabular(filepath):
     return None, None, None
 
 def inspect_zip(filepath):
+    """Safely inspects zip archive without extracting, handling corruptions gracefully."""
     try:
         with zipfile.ZipFile(filepath, 'r') as zf:
             infolist = zf.infolist()
@@ -219,6 +226,7 @@ def run_programmatic_integrity_tests():
 
 def run_phase0_audit():
     print(f"Auditing workspace at: {ROOT_DIR}")
+    metadata_inspection_errors = []
     
     target_rel_paths = [
         # Raw data
@@ -291,9 +299,16 @@ def run_phase0_audit():
         rows, cols, col_names = None, None, None
         if ext in [".parquet", ".csv", ".json"]:
             rows, cols, col_names = inspect_tabular(full_path)
+            if rows is None and isinstance(col_names, str):
+                metadata_inspection_errors.append(f"{rel_path}: Tabular inspection error: {col_names}")
+                notes += f" | TABULAR INSPECTION ERROR: {col_names}"
         elif ext == ".zip":
             zip_count, uncompressed_size, zip_files = inspect_zip(full_path)
-            notes += f" | Contains {zip_count} entries ({uncompressed_size:,} bytes uncompressed): {', '.join(zip_files)}"
+            if zip_count is None:
+                metadata_inspection_errors.append(f"{rel_path}: ZIP inspection error: {zip_files}")
+                notes += f" | ZIP INSPECTION ERROR: {zip_files}"
+            else:
+                notes += f" | Contains {zip_count} entries ({uncompressed_size:,} bytes uncompressed): {', '.join(zip_files)}"
             
         rec = {
             "relative_path": rel_path.replace("\\", "/"),
@@ -316,7 +331,7 @@ def run_phase0_audit():
     df_inv.to_csv(inv_csv_path, index=False)
     print(f"Saved inventory to: {inv_csv_path} ({len(df_inv)} files)")
     
-    # 2. Check for mandatory baseline files upfront (Finding 2)
+    # 2. Check for mandatory baseline files upfront
     required_baseline_files = [
         "data/processed/canonical_dataset.parquet",
         "data/processed/baseline_train.csv",
@@ -331,7 +346,7 @@ def run_phase0_audit():
         blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
 
 **Audit Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**Status:** BLOCKED / INCOMPLETE (Missing Required Artifacts)  
+**Status:** BLOCKED / INCOMPLETE (Missing Required Baseline Artifacts)  
 
 ### Missing Required Baseline Artifacts:
 {chr(10).join(f"- `{f}`" for f in missing_baseline)}
@@ -343,7 +358,7 @@ Please restore or acquire these baseline files before proceeding.
             f.write(blocked_report)
         return False
         
-    # 3. Read baseline files safely with structured exception handling (Finding 4)
+    # 3. Read baseline files safely with structured exception handling
     try:
         df_canonical = pd.read_parquet(os.path.join(ROOT_DIR, "data/processed/canonical_dataset.parquet"))
         df_train = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_train.csv"))
@@ -365,19 +380,21 @@ Execution halted because a required baseline file failed schema ingestion.
             f.write(blocked_report)
         return False
     
-    # 4. Programmatically run integrity test suite (Findings 1, 2, 5)
+    # 4. Programmatically run integrity test suite
     test_suite_res = run_programmatic_integrity_tests()
     print(f"Integrity test execution: success={test_suite_res['success']}, ran={test_suite_res['tests_run']}")
     
-    # Handle test suite summary dynamically
     if test_suite_res["tests_run"] == 0:
         test_summary_str = "BLOCKED: 0 tests discovered in test suite"
+        test_suite_passed = False
     elif test_suite_res["success"]:
         test_summary_str = f"PASSED (All {test_suite_res['tests_run']} tests succeeded)"
+        test_suite_passed = True
     else:
         test_summary_str = f"FAILED ({test_suite_res['failures']} failures, {test_suite_res['errors']} errors out of {test_suite_res['tests_run']} tests)"
+        test_suite_passed = False
     
-    # 5. Independently compute invariants and derive dynamic statuses (Finding 1)
+    # 5. Independently compute partition invariants
     train_ids = set(df_train["example_id"].unique())
     val_ids = set(df_val["example_id"].unique())
     test_ids = set(df_test["example_id"].unique())
@@ -420,16 +437,37 @@ Execution halted because a required baseline file failed schema ingestion.
     reconciled = (sum_splits == canonical_len)
     status_reconciliation = "PASSED (Exact match)" if reconciled else f"FAILED (Sum: {sum_splits:,} != Canonical: {canonical_len:,})"
     
-    # 6. Overall Empirical Gating Decision (Finding 1 & 2)
-    overall_invariants_passed = (exclusivity_all_passed and leakage_all_passed and closed_set_passed and reconciled)
-    overall_audit_passed = (test_suite_res["success"] and test_suite_res["tests_run"] > 0 and overall_invariants_passed)
+    invariants_passed = (exclusivity_all_passed and leakage_all_passed and closed_set_passed and reconciled)
+
+    # 6. Environment & Git Hygiene Checks
+    volumes = get_storage_volumes(ROOT_DIR)
+    git_branch, git_tracking = inspect_git_state(ROOT_DIR)
+    smoke_results, smoke_all_passed = run_library_smoke_tests()
+    gitignore_rules = inspect_gitignore_rules(ROOT_DIR)
+    gitignore_hygiene_passed = all(info["found"] for info in gitignore_rules.values())
+    metadata_inspection_passed = (len(metadata_inspection_errors) == 0)
+
+    # 7. Comprehensive Multi-Pillar Gating Decision (Item 1 from Review)
+    overall_audit_passed = (
+        test_suite_passed and 
+        invariants_passed and 
+        smoke_all_passed and 
+        gitignore_hygiene_passed and 
+        metadata_inspection_passed
+    )
     
     if overall_audit_passed:
-        audit_outcome_str = "**Empirically Verified & Reconciled (100% Invariants Passed)**"
+        audit_outcome_str = "**PASSED (100% Invariants, Test Suite, Environment & Hygiene Checks Verified)**"
     else:
-        audit_outcome_str = "**FAILED / INVARIANTS BREACHED (Audit Gated)**"
+        failed_pillars = []
+        if not test_suite_passed: failed_pillars.append("Integrity Test Suite")
+        if not invariants_passed: failed_pillars.append("Partition Invariants")
+        if not smoke_all_passed: failed_pillars.append("Library Smoke Tests")
+        if not gitignore_hygiene_passed: failed_pillars.append("Git Hygiene Rules")
+        if not metadata_inspection_passed: failed_pillars.append("Metadata Inspection")
+        audit_outcome_str = f"**FAILED / GATED ({', '.join(failed_pillars)} Failed)**"
         
-    # 7. Reconcile text length and domain statistics (Finding 5)
+    # 8. Reconcile text length and domain statistics
     df_canonical["word_count"] = df_canonical["text_normalized"].str.split().str.len()
     
     wc_stats = {
@@ -445,9 +483,8 @@ Execution halted because a required baseline file failed schema ingestion.
     }
     
     prod_dist = df_canonical["domain"].value_counts().to_dict()
-    num_domains = len(prod_dist)  # Dynamically computed
+    num_domains = len(prod_dist)
     
-    # Label distribution across splits
     label_dist = []
     labels = sorted(df_canonical["intent_label"].unique())
     for lbl in labels:
@@ -466,7 +503,6 @@ Execution halted because a required baseline file failed schema ingestion.
             "test_pct": round(c_te / c_tot * 100, 1)
         })
 
-    # Retrieve reconciled column counts from actual file inspect map
     canonical_meta = file_metadata_map.get("data/processed/canonical_dataset.parquet", {})
     train_meta = file_metadata_map.get("data/processed/baseline_train.csv", {})
     val_meta = file_metadata_map.get("data/processed/baseline_validation.csv", {})
@@ -475,25 +511,40 @@ Execution halted because a required baseline file failed schema ingestion.
     split_meta = file_metadata_map.get("data/manifests/split_indomain.csv", {})
 
     # Generate baseline_snapshot_inventory.md
-    md_baseline = f"""# Baseline Snapshot Inventory (May 2018–April 2021 Reference Release)
+    md_baseline = f"""# Baseline Snapshot Inventory — Captured Local Execution Snapshot
 
 **Audit Date:** {datetime.now().strftime('%Y-%m-%d')}  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Scope:** Preserved reference baseline snapshot files, checksums, and empirical profile metrics.  
 **Retention Policy:** Strictly immutable reference baseline release. Preserved as a historical benchmark.
 
+> [!NOTE]
+> **Document Status: Captured Local Execution Snapshot**  
+> This artifact represents a local audit snapshot generated on the developer workstation by executing:
+> ```powershell
+> mamba run -p D:\\NLP\\env python scripts/audit_phase0.py
+> mamba run -p D:\\NLP\\env python -m unittest tests/data/test_data_integrity.py
+> ```
+> All invariants and tests are dynamically evaluated from local disk artifacts during execution.
+
 ---
 
-## 1. Executive Summary
-
-This inventory documents the pre-existing reference baseline dataset generated from the CFPB historical export (May 2018 through April 2021). The dataset was used to establish the initial repository baseline benchmark (`facebook/xlm-v-base` 16-class classification).
+## 1. Executive Summary & Gating Decision
 
 * **Total Canonical Narratives:** {len(df_canonical):,} records
 * **Partition Split:** {len(df_train):,} train (70.0%) / {len(df_val):,} validation (15.0%) / {len(df_test):,} test (15.0%)
 * **Intent Classes:** 16 classes mapped deterministically from CFPB administrative `Issue` and `Sub-issue` fields
 * **Normalized Product Domains:** {num_domains} financial domains
-* **Audit Scope Status:** {len(target_rel_paths) - len(missing_optional_artifacts)} of {len(target_rel_paths)} target artifacts inspected ({len(missing_optional_artifacts)} missing optional)
-* **Overall Audit Verdict:** {audit_outcome_str}
+* **Audit Scope:** {len(target_rel_paths) - len(missing_optional_artifacts)} of {len(target_rel_paths)} target artifacts inspected ({len(missing_optional_artifacts)} optional missing)
+* **Metadata Inspection Errors:** {len(metadata_inspection_errors)} errors
+* **Multi-Pillar Audit Verdict:** {audit_outcome_str}
+
+### Gate Verification Status:
+* [x] **Partition Invariants:** {'PASSED' if invariants_passed else 'FAILED'}
+* [x] **Data Integrity Test Suite:** {'PASSED' if test_suite_passed else 'FAILED'}
+* [x] **Environment & Library Smoke Tests:** {'PASSED' if smoke_all_passed else 'FAILED'}
+* [x] **Git Hygiene Rules (.gitignore):** {'PASSED' if gitignore_hygiene_passed else 'FAILED'}
+* [x] **Metadata Inspection Integrity:** {'PASSED' if metadata_inspection_passed else 'FAILED'}
 
 ---
 
@@ -509,13 +560,11 @@ This inventory documents the pre-existing reference baseline dataset generated f
 | `data/manifests/split_indomain.csv` | CSV | {split_meta.get('file_size_bytes', 0):,} | {split_meta.get('file_size_mb', 0)} | {split_meta.get('row_count', 0):,} | {split_meta.get('column_count', 0)} | `{split_meta.get('sha256_checksum', '')}` |
 
 > [!NOTE]
-> All row and column counts above are dynamically read from disk using RFC 4180 CSV-aware record parsing and Parquet metadata inspect, resolving previous reporting discrepancies.
+> All row and column counts above are dynamically read from disk using RFC 4180 CSV-aware record parsing and Parquet metadata inspect.
 
 ---
 
 ## 3. Independent Verification vs. Historical Repository Claims
-
-To ensure complete empirical clarity, this audit explicitly distinguishes between properties verified directly on the disk artifacts during this run versus historical benchmark claims reported by prior phases.
 
 ### A. Properties Empirically Verified by Current Audit:
 1. **Programmatic Test Execution:**  
@@ -598,18 +647,21 @@ The baseline corpus covers **{num_domains}** normalized product domains:
         f.write(md_baseline)
     print("Saved docs/baseline_snapshot_inventory.md")
 
-    # 8. Generate docs/environment_and_storage_check.md (Findings 3 & 4)
-    volumes = get_storage_volumes(ROOT_DIR)
-    git_branch, git_tracking = inspect_git_state(ROOT_DIR)
-    smoke_results, smoke_all_passed = run_library_smoke_tests()
-    gitignore_rules = inspect_gitignore_rules(ROOT_DIR)
-    
-    md_env = f"""# Environment and Storage Pre-Flight Check (Cross-Platform & Dynamically Verified)
+    # Generate docs/environment_and_storage_check.md
+    md_env = f"""# Environment and Storage Pre-Flight Check — Captured Local Audit Snapshot
 
 **Audit Date:** {datetime.now().strftime('%Y-%m-%d')}  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Workspace Root:** `{ROOT_DIR}`  
 **Git Branch:** `{git_branch}` (Tracking: `{git_tracking}`)
+
+> [!NOTE]
+> **Document Status: Captured Local Workstation Execution Snapshot**  
+> This artifact represents a local audit snapshot dynamically generated on the developer workstation. In accordance with the Phase 0 data protocol, reproducibility evidence can be regenerated locally using the following commands:
+> ```powershell
+> mamba run -p D:\\NLP\\env python scripts/audit_phase0.py
+> mamba run -p D:\\NLP\\env python -m unittest tests/data/test_data_integrity.py
+> ```
 
 ---
 
@@ -669,13 +721,14 @@ The baseline corpus covers **{num_domains}** normalized product domains:
 
 ## 3. Git Hygiene and Exclusion Rules (Dynamically Inspected from `.gitignore`)
 
-| Pattern Rule | Description | Found in `.gitignore` | Line Number |
-| :--- | :--- | :---: | :---: |
+| Pattern Rule | Description | Found in `.gitignore` | Line Number | Status |
+| :--- | :--- | :---: | :---: | :---: |
 """
     for rule, info in gitignore_rules.items():
         found_str = "Yes" if info['found'] else "No"
         line_str = f"Line {info['line']}" if info['line'] is not None else "Not Found"
-        md_env += f"| `{rule}` | {info['desc']} | {found_str} | {line_str} |\n"
+        rule_status = "PASSED" if info['found'] else "FAILED"
+        md_env += f"| `{rule}` | {info['desc']} | {found_str} | {line_str} | **{rule_status}** |\n"
 
     md_env += f"""
 ---
@@ -700,5 +753,5 @@ if __name__ == "__main__":
         print("PHASE 0 AUDIT FAILED OR GATED: Exiting with code 1.")
         sys.exit(1)
     else:
-        print("PHASE 0 AUDIT PASSED: All invariants and tests verified.")
+        print("PHASE 0 AUDIT PASSED: All multi-pillar invariants, tests, and environment checks verified.")
         sys.exit(0)
