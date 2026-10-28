@@ -15,7 +15,8 @@ This inventory documents the pre-existing reference baseline dataset generated f
 * **Partition Split:** 32,019 train (70.0%) / 6,852 validation (15.0%) / 6,852 test (15.0%)
 * **Intent Classes:** 16 classes mapped deterministically from CFPB administrative `Issue` and `Sub-issue` fields
 * **Normalized Product Domains:** 9 financial domains
-* **Audit Outcome:** **Empirically Verified & Reconciled** against actual disk files
+* **Audit Scope Status:** 27 of 27 target artifacts inspected (0 missing optional)
+* **Overall Audit Verdict:** **Empirically Verified & Reconciled (100% Invariants Passed)**
 
 ---
 
@@ -45,21 +46,21 @@ To ensure complete empirical clarity, this audit explicitly distinguishes betwee
    * **Tests executed:** 8
    * **Failures:** 0
    * **Errors:** 0
-   * **Overall Result:** PASSED (All 8 tests succeeded)
-2. **Mathematical Partition Invariants (Independently Computed):**
+   * **Test Suite Result:** PASSED (All 8 tests succeeded)
+2. **Mathematical Partition Invariants (Independently Computed & Dynamically Derived):**
    * **Example ID Exclusivity:**
-     * Train $\cap$ Val: 0 overlapping IDs (PASSED)
-     * Train $\cap$ Test: 0 overlapping IDs (PASSED)
-     * Val $\cap$ Test: 0 overlapping IDs (PASSED)
+     * Train $\cap$ Val: 0 overlapping IDs — **PASSED**
+     * Train $\cap$ Test: 0 overlapping IDs — **PASSED**
+     * Val $\cap$ Test: 0 overlapping IDs — **PASSED**
    * **Duplicate Group Leakage:**
-     * Train $\cap$ Val groups: 0 shared group IDs (PASSED)
-     * Train $\cap$ Test groups: 0 shared group IDs (PASSED)
-     * Val $\cap$ Test groups: 0 shared group IDs (PASSED)
+     * Train $\cap$ Val groups: 0 shared group IDs — **PASSED**
+     * Train $\cap$ Test groups: 0 shared group IDs — **PASSED**
+     * Val $\cap$ Test groups: 0 shared group IDs — **PASSED**
    * **Closed-Set Label Containment:**
-     * Val labels missing from Train: 0 (PASSED)
-     * Test labels missing from Train: 0 (PASSED)
+     * Val labels missing from Train: 0 — **PASSED**
+     * Test labels missing from Train: 0 — **PASSED**
    * **Row Count Reconciliation:**
-     * Train (32,019) + Val (6,852) + Test (6,852) = 45,723 vs Canonical Parquet 45,723 (MATCH (Exact))
+     * Train (32,019) + Val (6,852) + Test (6,852) = 45,723 vs Canonical Parquet 45,723 — **PASSED (Exact match)**
 
 ### B. Historical Repository Claims (Unverified Baseline Context):
 The following figures represent **prior repository reports from earlier training runs**, not independently re-trained or reproduced results in this phase:

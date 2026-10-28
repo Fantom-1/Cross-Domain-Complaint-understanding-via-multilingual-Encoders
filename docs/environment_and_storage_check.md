@@ -1,9 +1,9 @@
-# Environment and Storage Pre-Flight Check (Cross-Platform)
+# Environment and Storage Pre-Flight Check (Cross-Platform & Dynamically Verified)
 
 **Audit Date:** 2026-10-28  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Workspace Root:** `D:\NLP`  
-**Git Branch:** `DATA_PREPARATION` (tracking `origin/main`)
+**Git Branch:** `DATA_PREPARATION` (Tracking: `origin/DATA_PREPARATION`)
 
 ---
 
@@ -12,7 +12,7 @@
 | Volume Label | Mount / Root Path | Total Capacity | Used Space | Free Space | Free % | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | Workspace Volume (D:) | `D:\NLP` | 200.00 GB | 165.98 GB | 34.02 GB | 17.0% | **Adequate Headroom** |
-| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.28 GB | 30.44 GB | 11.1% | **Adequate Headroom** |
+| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.75 GB | 29.96 GB | 10.9% | **Adequate Headroom** |
 
 ### Storage Budget Analysis:
 1. **Existing Raw Data:**
@@ -34,7 +34,7 @@
 
 ---
 
-## 2. Software and Computational Stack
+## 2. Software and Computational Stack (Live Smoke-Test Verified)
 
 | Component | Specification | Verification Method | Status |
 | :--- | :--- | :--- | :---: |
@@ -42,17 +42,28 @@
 | **Package Manager** | Mamba / Conda | Environment Inspection | Operational |
 | **Project Python Prefix** | `D:\NLP\env` | `sys.prefix` | Operational |
 | **Python Runtime** | Python 3.12.16 | `sys.version` | Verified |
-| **Core Libraries** | `pandas`, `pyarrow`, `scikit-learn`, `scipy`, `datasketch`, `transformers`, `datasets`, `tokenizers` | In-Environment Smoke Test | 100% Passed |
+| **Library: `pandas`** | `3.1.0` | In-Memory Import Check | Verified (v3.1.0) |
+| **Library: `pyarrow`** | `26.0.0` | In-Memory Import Check | Verified (v26.0.0) |
+| **Library: `sklearn`** | `1.9.1` | In-Memory Import Check | Verified (v1.9.1) |
+| **Library: `scipy`** | `1.18.1` | In-Memory Import Check | Verified (v1.18.1) |
+| **Library: `datasketch`** | `2.0.0` | In-Memory Import Check | Verified (v2.0.0) |
+| **Library: `transformers`** | `5.21.0` | In-Memory Import Check | Verified (v5.21.0) |
+| **Library: `datasets`** | `5.1.0` | In-Memory Import Check | Verified (v5.1.0) |
+| **Library: `tokenizers`** | `0.23.3` | In-Memory Import Check | Verified (v0.23.3) |
+
+* **Overall Library Smoke Test Result:** **100% Passed (All 8 libraries verified)**
 
 ---
 
-## 3. Git Hygiene and Exclusion Rules
+## 3. Git Hygiene and Exclusion Rules (Dynamically Inspected from `.gitignore`)
 
-Audit of `.gitignore` confirmed that:
-* `env/` is matched and ignored (line 19) — no local environment binaries can contaminate git.
-* `/data/raw/`, `/data/interim/`, `/data/processed/` are strictly ignored (lines 2–4).
-* `!/data/manifests/` is explicitly retained (line 5) to ensure all checksums, provenance records, and audit logs are tracked in version control.
-* Checkpoints, models, and private cluster profiles (`Phase 2/SERVER_PROFILE_PRIVATE.md`) are shielded from commits.
+| Pattern Rule | Description | Found in `.gitignore` | Line Number |
+| :--- | :--- | :---: | :---: |
+| `env/` | Environment isolation | Yes | Line 17 |
+| `/data/raw/` | Raw data exclusion | Yes | Line 2 |
+| `/data/interim/` | Interim data exclusion | Yes | Line 3 |
+| `/data/processed/` | Processed data exclusion | Yes | Line 4 |
+| `!/data/manifests/` | Manifest tracking exemption | Yes | Line 5 |
 
 ---
 

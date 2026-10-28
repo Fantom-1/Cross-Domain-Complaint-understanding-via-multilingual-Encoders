@@ -1,11 +1,13 @@
-"""Phase 0 Audit and Inventory Generator (Hardened & Reconciled).
+"""Phase 0 Audit and Inventory Generator (Fully Hardened, Dynamic & Gated).
 
-Addresses PR #1 review blocking findings:
-1. Programmatically runs tests/data/test_data_integrity.py and independently computes invariants.
-2. Gracefully handles missing files without crashing, producing an explicit BLOCKED report if needed.
-3. Uses RFC 4180 CSV-aware record counting (csv.reader) to properly handle embedded newlines in text.
-4. Uses cross-platform dynamic volume detection (no hardcoded D:\\ or C:\\ paths).
-5. Reconciles and dynamically binds all figures (column counts, domain counts, row counts) across artifacts.
+Enforces strict empirical verification for PR #1:
+1. Programmatically executes tests/data/test_data_integrity.py and strictly gates the audit outcome.
+2. Derives all invariant status labels dynamically from computed data (zero hardcoded PASSED labels).
+3. Dynamically queries Git branch/tracking, performs live library smoke test imports, and parses .gitignore.
+4. Wraps all dataset ingestion in structured exception handling, producing explicit BLOCKED reports on failure.
+5. Employs RFC 4180 CSV-aware record counting (csv.reader) to correctly handle multiline quoted fields.
+6. Discovers mount/volume storage quotas dynamically without hardcoding OS-specific drive letters.
+7. Reconciles domain counts (9) and column counts (18 canonical, 10 split manifest) against disk files.
 """
 
 import os
@@ -18,6 +20,7 @@ import shutil
 import tempfile
 import zipfile
 import unittest
+import subprocess
 from datetime import datetime
 import pandas as pd
 
@@ -117,6 +120,78 @@ def get_storage_volumes(workspace_dir):
         
     return volumes
 
+def inspect_git_state(workspace_dir):
+    """Dynamically inspects active Git branch and upstream tracking information."""
+    branch = "Unknown"
+    tracking = "None"
+    try:
+        r_b = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=workspace_dir, capture_output=True, text=True, check=True)
+        branch = r_b.stdout.strip()
+    except Exception as e:
+        branch = f"Undetected ({e})"
+        
+    try:
+        r_u = subprocess.run(["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], cwd=workspace_dir, capture_output=True, text=True, check=True)
+        tracking = r_u.stdout.strip()
+    except Exception:
+        tracking = "Local branch only / Untracked"
+        
+    return branch, tracking
+
+def run_library_smoke_tests():
+    """Runs live in-memory import tests for core data preparation libraries and returns versions."""
+    required_libs = [
+        "pandas",
+        "pyarrow",
+        "sklearn",
+        "scipy",
+        "datasketch",
+        "transformers",
+        "datasets",
+        "tokenizers"
+    ]
+    results = {}
+    for lib in required_libs:
+        try:
+            mod = __import__(lib)
+            version = getattr(mod, "__version__", "installed")
+            results[lib] = {"success": True, "version": str(version), "error": None}
+        except Exception as e:
+            results[lib] = {"success": False, "version": "N/A", "error": str(e)}
+            
+    all_passed = all(r["success"] for r in results.values())
+    return results, all_passed
+
+def inspect_gitignore_rules(workspace_dir):
+    """Inspects .gitignore file to verify retention and exclusion rules with dynamic line references."""
+    rules_to_check = {
+        "env/": "Environment isolation",
+        "/data/raw/": "Raw data exclusion",
+        "/data/interim/": "Interim data exclusion",
+        "/data/processed/": "Processed data exclusion",
+        "!/data/manifests/": "Manifest tracking exemption"
+    }
+    found_rules = {}
+    gitignore_path = os.path.join(workspace_dir, ".gitignore")
+    
+    if not os.path.exists(gitignore_path):
+        return {k: {"found": False, "line": None, "desc": desc} for k, desc in rules_to_check.items()}
+        
+    with open(gitignore_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        
+    for k, desc in rules_to_check.items():
+        found = False
+        line_num = None
+        for i, line in enumerate(lines, 1):
+            if k in line.strip():
+                found = True
+                line_num = i
+                break
+        found_rules[k] = {"found": found, "line": line_num, "desc": desc}
+        
+    return found_rules
+
 def run_programmatic_integrity_tests():
     """Programmatically executes tests/data/test_data_integrity.py and captures results."""
     try:
@@ -188,11 +263,12 @@ def run_phase0_audit():
     
     inventory_records = []
     file_metadata_map = {}
+    missing_optional_artifacts = []
     
     for rel_path, category, retention_policy, notes in target_rel_paths:
         full_path = os.path.join(ROOT_DIR, rel_path)
         if not os.path.exists(full_path):
-            print(f"Warning: File not found: {rel_path}")
+            missing_optional_artifacts.append(rel_path)
             inventory_records.append({
                 "relative_path": rel_path.replace("\\", "/"),
                 "category": category,
@@ -240,7 +316,7 @@ def run_phase0_audit():
     df_inv.to_csv(inv_csv_path, index=False)
     print(f"Saved inventory to: {inv_csv_path} ({len(df_inv)} files)")
     
-    # 2. Check for mandatory baseline files (Finding 2)
+    # 2. Check for mandatory baseline files upfront (Finding 2)
     required_baseline_files = [
         "data/processed/canonical_dataset.parquet",
         "data/processed/baseline_train.csv",
@@ -255,7 +331,7 @@ def run_phase0_audit():
         blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
 
 **Audit Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**Status:** BLOCKED / INCOMPLETE  
+**Status:** BLOCKED / INCOMPLETE (Missing Required Artifacts)  
 
 ### Missing Required Baseline Artifacts:
 {chr(10).join(f"- `{f}`" for f in missing_baseline)}
@@ -267,17 +343,41 @@ Please restore or acquire these baseline files before proceeding.
             f.write(blocked_report)
         return False
         
-    # 3. Read baseline files safely
-    df_canonical = pd.read_parquet(os.path.join(ROOT_DIR, "data/processed/canonical_dataset.parquet"))
-    df_train = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_train.csv"))
-    df_val = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_validation.csv"))
-    df_test = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_test.csv"))
+    # 3. Read baseline files safely with structured exception handling (Finding 4)
+    try:
+        df_canonical = pd.read_parquet(os.path.join(ROOT_DIR, "data/processed/canonical_dataset.parquet"))
+        df_train = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_train.csv"))
+        df_val = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_validation.csv"))
+        df_test = pd.read_csv(os.path.join(ROOT_DIR, "data/processed/baseline_test.csv"))
+    except Exception as e:
+        print(f"CRITICAL ERROR: Failed to parse required baseline datasets: {e}")
+        blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
+
+**Audit Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Status:** BLOCKED / CORRUPTED DATASET  
+
+### Error Ingesting Baseline Data:
+`{str(e)}`
+
+Execution halted because a required baseline file failed schema ingestion.
+"""
+        with open(os.path.join(ROOT_DIR, "docs/baseline_snapshot_inventory.md"), "w", encoding="utf-8") as f:
+            f.write(blocked_report)
+        return False
     
-    # 4. Programmatically run integrity test suite (Finding 1)
+    # 4. Programmatically run integrity test suite (Findings 1, 2, 5)
     test_suite_res = run_programmatic_integrity_tests()
     print(f"Integrity test execution: success={test_suite_res['success']}, ran={test_suite_res['tests_run']}")
     
-    # 5. Independently compute invariants (Finding 1)
+    # Handle test suite summary dynamically
+    if test_suite_res["tests_run"] == 0:
+        test_summary_str = "BLOCKED: 0 tests discovered in test suite"
+    elif test_suite_res["success"]:
+        test_summary_str = f"PASSED (All {test_suite_res['tests_run']} tests succeeded)"
+    else:
+        test_summary_str = f"FAILED ({test_suite_res['failures']} failures, {test_suite_res['errors']} errors out of {test_suite_res['tests_run']} tests)"
+    
+    # 5. Independently compute invariants and derive dynamic statuses (Finding 1)
     train_ids = set(df_train["example_id"].unique())
     val_ids = set(df_val["example_id"].unique())
     test_ids = set(df_test["example_id"].unique())
@@ -285,6 +385,11 @@ Please restore or acquire these baseline files before proceeding.
     overlap_tr_val = len(train_ids & val_ids)
     overlap_tr_te = len(train_ids & test_ids)
     overlap_val_te = len(val_ids & test_ids)
+    
+    status_exclusivity_tr_val = "PASSED" if overlap_tr_val == 0 else f"FAILED ({overlap_tr_val} overlapping IDs)"
+    status_exclusivity_tr_te = "PASSED" if overlap_tr_te == 0 else f"FAILED ({overlap_tr_te} overlapping IDs)"
+    status_exclusivity_val_te = "PASSED" if overlap_val_te == 0 else f"FAILED ({overlap_val_te} overlapping IDs)"
+    exclusivity_all_passed = (overlap_tr_val == 0 and overlap_tr_te == 0 and overlap_val_te == 0)
     
     train_groups = set(df_train["group_id"].unique())
     val_groups = set(df_val["group_id"].unique())
@@ -294,6 +399,11 @@ Please restore or acquire these baseline files before proceeding.
     group_leak_tr_te = len(train_groups & test_groups)
     group_leak_val_te = len(val_groups & test_groups)
     
+    status_leakage_tr_val = "PASSED" if group_leak_tr_val == 0 else f"FAILED ({group_leak_tr_val} shared group IDs)"
+    status_leakage_tr_te = "PASSED" if group_leak_tr_te == 0 else f"FAILED ({group_leak_tr_te} shared group IDs)"
+    status_leakage_val_te = "PASSED" if group_leak_val_te == 0 else f"FAILED ({group_leak_val_te} shared group IDs)"
+    leakage_all_passed = (group_leak_tr_val == 0 and group_leak_tr_te == 0 and group_leak_val_te == 0)
+    
     train_labels = set(df_train["label"].unique())
     val_labels = set(df_val["label"].unique())
     test_labels = set(df_test["label"].unique())
@@ -301,11 +411,25 @@ Please restore or acquire these baseline files before proceeding.
     val_missing_from_train = val_labels - train_labels
     test_missing_from_train = test_labels - train_labels
     
+    status_closed_set_val = "PASSED" if len(val_missing_from_train) == 0 else f"FAILED (Missing: {val_missing_from_train})"
+    status_closed_set_te = "PASSED" if len(test_missing_from_train) == 0 else f"FAILED (Missing: {test_missing_from_train})"
+    closed_set_passed = (len(val_missing_from_train) == 0 and len(test_missing_from_train) == 0)
+    
     sum_splits = len(df_train) + len(df_val) + len(df_test)
     canonical_len = len(df_canonical)
     reconciled = (sum_splits == canonical_len)
+    status_reconciliation = "PASSED (Exact match)" if reconciled else f"FAILED (Sum: {sum_splits:,} != Canonical: {canonical_len:,})"
     
-    # 6. Reconcile text length and domain statistics (Finding 5)
+    # 6. Overall Empirical Gating Decision (Finding 1 & 2)
+    overall_invariants_passed = (exclusivity_all_passed and leakage_all_passed and closed_set_passed and reconciled)
+    overall_audit_passed = (test_suite_res["success"] and test_suite_res["tests_run"] > 0 and overall_invariants_passed)
+    
+    if overall_audit_passed:
+        audit_outcome_str = "**Empirically Verified & Reconciled (100% Invariants Passed)**"
+    else:
+        audit_outcome_str = "**FAILED / INVARIANTS BREACHED (Audit Gated)**"
+        
+    # 7. Reconcile text length and domain statistics (Finding 5)
     df_canonical["word_count"] = df_canonical["text_normalized"].str.split().str.len()
     
     wc_stats = {
@@ -321,7 +445,7 @@ Please restore or acquire these baseline files before proceeding.
     }
     
     prod_dist = df_canonical["domain"].value_counts().to_dict()
-    num_domains = len(prod_dist)  # Reconciled domain count
+    num_domains = len(prod_dist)  # Dynamically computed
     
     # Label distribution across splits
     label_dist = []
@@ -368,7 +492,8 @@ This inventory documents the pre-existing reference baseline dataset generated f
 * **Partition Split:** {len(df_train):,} train (70.0%) / {len(df_val):,} validation (15.0%) / {len(df_test):,} test (15.0%)
 * **Intent Classes:** 16 classes mapped deterministically from CFPB administrative `Issue` and `Sub-issue` fields
 * **Normalized Product Domains:** {num_domains} financial domains
-* **Audit Outcome:** **Empirically Verified & Reconciled** against actual disk files
+* **Audit Scope Status:** {len(target_rel_paths) - len(missing_optional_artifacts)} of {len(target_rel_paths)} target artifacts inspected ({len(missing_optional_artifacts)} missing optional)
+* **Overall Audit Verdict:** {audit_outcome_str}
 
 ---
 
@@ -398,21 +523,21 @@ To ensure complete empirical clarity, this audit explicitly distinguishes betwee
    * **Tests executed:** {test_suite_res['tests_run']}
    * **Failures:** {test_suite_res['failures']}
    * **Errors:** {test_suite_res['errors']}
-   * **Overall Result:** {'PASSED (All 8 tests succeeded)' if test_suite_res['success'] else 'FAILED'}
-2. **Mathematical Partition Invariants (Independently Computed):**
+   * **Test Suite Result:** {test_summary_str}
+2. **Mathematical Partition Invariants (Independently Computed & Dynamically Derived):**
    * **Example ID Exclusivity:**
-     * Train $\\cap$ Val: {overlap_tr_val} overlapping IDs (PASSED)
-     * Train $\\cap$ Test: {overlap_tr_te} overlapping IDs (PASSED)
-     * Val $\\cap$ Test: {overlap_val_te} overlapping IDs (PASSED)
+     * Train $\\cap$ Val: {overlap_tr_val} overlapping IDs — **{status_exclusivity_tr_val}**
+     * Train $\\cap$ Test: {overlap_tr_te} overlapping IDs — **{status_exclusivity_tr_te}**
+     * Val $\\cap$ Test: {overlap_val_te} overlapping IDs — **{status_exclusivity_val_te}**
    * **Duplicate Group Leakage:**
-     * Train $\\cap$ Val groups: {group_leak_tr_val} shared group IDs (PASSED)
-     * Train $\\cap$ Test groups: {group_leak_tr_te} shared group IDs (PASSED)
-     * Val $\\cap$ Test groups: {group_leak_val_te} shared group IDs (PASSED)
+     * Train $\\cap$ Val groups: {group_leak_tr_val} shared group IDs — **{status_leakage_tr_val}**
+     * Train $\\cap$ Test groups: {group_leak_tr_te} shared group IDs — **{status_leakage_tr_te}**
+     * Val $\\cap$ Test groups: {group_leak_val_te} shared group IDs — **{status_leakage_val_te}**
    * **Closed-Set Label Containment:**
-     * Val labels missing from Train: {len(val_missing_from_train)} (PASSED)
-     * Test labels missing from Train: {len(test_missing_from_train)} (PASSED)
+     * Val labels missing from Train: {len(val_missing_from_train)} — **{status_closed_set_val}**
+     * Test labels missing from Train: {len(test_missing_from_train)} — **{status_closed_set_te}**
    * **Row Count Reconciliation:**
-     * Train ({len(df_train):,}) + Val ({len(df_val):,}) + Test ({len(df_test):,}) = {sum_splits:,} vs Canonical Parquet {canonical_len:,} ({'MATCH (Exact)' if reconciled else 'MISMATCH'})
+     * Train ({len(df_train):,}) + Val ({len(df_val):,}) + Test ({len(df_test):,}) = {sum_splits:,} vs Canonical Parquet {canonical_len:,} — **{status_reconciliation}**
 
 ### B. Historical Repository Claims (Unverified Baseline Context):
 The following figures represent **prior repository reports from earlier training runs**, not independently re-trained or reproduced results in this phase:
@@ -473,15 +598,18 @@ The baseline corpus covers **{num_domains}** normalized product domains:
         f.write(md_baseline)
     print("Saved docs/baseline_snapshot_inventory.md")
 
-    # 7. Generate docs/environment_and_storage_check.md (Finding 4)
+    # 8. Generate docs/environment_and_storage_check.md (Findings 3 & 4)
     volumes = get_storage_volumes(ROOT_DIR)
+    git_branch, git_tracking = inspect_git_state(ROOT_DIR)
+    smoke_results, smoke_all_passed = run_library_smoke_tests()
+    gitignore_rules = inspect_gitignore_rules(ROOT_DIR)
     
-    md_env = f"""# Environment and Storage Pre-Flight Check (Cross-Platform)
+    md_env = f"""# Environment and Storage Pre-Flight Check (Cross-Platform & Dynamically Verified)
 
 **Audit Date:** {datetime.now().strftime('%Y-%m-%d')}  
 **Auditor:** Automated Phase 0 Script (`scripts/audit_phase0.py`)  
 **Workspace Root:** `{ROOT_DIR}`  
-**Git Branch:** `DATA_PREPARATION` (tracking `origin/main`)
+**Git Branch:** `{git_branch}` (Tracking: `{git_tracking}`)
 
 ---
 
@@ -521,7 +649,7 @@ The baseline corpus covers **{num_domains}** normalized product domains:
 
 ---
 
-## 2. Software and Computational Stack
+## 2. Software and Computational Stack (Live Smoke-Test Verified)
 
 | Component | Specification | Verification Method | Status |
 | :--- | :--- | :--- | :---: |
@@ -529,18 +657,27 @@ The baseline corpus covers **{num_domains}** normalized product domains:
 | **Package Manager** | Mamba / Conda | Environment Inspection | Operational |
 | **Project Python Prefix** | `{sys.prefix}` | `sys.prefix` | Operational |
 | **Python Runtime** | Python {sys.version.split()[0]} | `sys.version` | Verified |
-| **Core Libraries** | `pandas`, `pyarrow`, `scikit-learn`, `scipy`, `datasketch`, `transformers`, `datasets`, `tokenizers` | In-Environment Smoke Test | 100% Passed |
+"""
+    for lib, res in smoke_results.items():
+        status_str = f"Verified (v{res['version']})" if res['success'] else f"FAILED: {res['error']}"
+        md_env += f"| **Library: `{lib}`** | `{res['version']}` | In-Memory Import Check | {status_str} |\n"
+
+    md_env += f"""
+* **Overall Library Smoke Test Result:** **{'100% Passed (All 8 libraries verified)' if smoke_all_passed else 'FAILED'}**
 
 ---
 
-## 3. Git Hygiene and Exclusion Rules
+## 3. Git Hygiene and Exclusion Rules (Dynamically Inspected from `.gitignore`)
 
-Audit of `.gitignore` confirmed that:
-* `env/` is matched and ignored (line 19) — no local environment binaries can contaminate git.
-* `/data/raw/`, `/data/interim/`, `/data/processed/` are strictly ignored (lines 2–4).
-* `!/data/manifests/` is explicitly retained (line 5) to ensure all checksums, provenance records, and audit logs are tracked in version control.
-* Checkpoints, models, and private cluster profiles (`Phase 2/SERVER_PROFILE_PRIVATE.md`) are shielded from commits.
+| Pattern Rule | Description | Found in `.gitignore` | Line Number |
+| :--- | :--- | :---: | :---: |
+"""
+    for rule, info in gitignore_rules.items():
+        found_str = "Yes" if info['found'] else "No"
+        line_str = f"Line {info['line']}" if info['line'] is not None else "Not Found"
+        md_env += f"| `{rule}` | {info['desc']} | {found_str} | {line_str} |\n"
 
+    md_env += f"""
 ---
 
 ## 4. Hard Safety Safeguards Adherence
@@ -554,9 +691,14 @@ Audit of `.gitignore` confirmed that:
     with open(os.path.join(ROOT_DIR, "docs/environment_and_storage_check.md"), "w", encoding="utf-8") as f:
         f.write(md_env)
     print("Saved docs/environment_and_storage_check.md")
-    return True
+    
+    return overall_audit_passed
 
 if __name__ == "__main__":
     success = run_phase0_audit()
     if not success:
+        print("PHASE 0 AUDIT FAILED OR GATED: Exiting with code 1.")
         sys.exit(1)
+    else:
+        print("PHASE 0 AUDIT PASSED: All invariants and tests verified.")
+        sys.exit(0)
