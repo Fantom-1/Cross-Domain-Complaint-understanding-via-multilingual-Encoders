@@ -5,13 +5,14 @@
 
 Captures verified provenance for all 21 CFPB FOIA narrative archive windows,
 the bulk complaints daily feed, and the auxiliary BANKING77 benchmark.
+
+Strictly distinguishes empirically observed properties from unverified/reported
+properties of unfetched archives, and documents consumer narrative submission terms.
 """
 
 import csv
 import json
 import os
-import subprocess
-import re
 from datetime import datetime
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -21,8 +22,12 @@ RAW_BANKING77_DIR = os.path.join(REPO_ROOT, "data", "raw", "banking77")
 
 CFPB_FOIA_BASE_URL = "https://files.consumerfinance.gov/f/documents/"
 CFPB_READING_ROOM_URL = "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/"
-PUBLIC_DOMAIN_LICENSE = "Public Domain (US Government Work)"
-PUBLIC_DOMAIN_URL = "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/"
+CFPB_TERMS_URL = "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/"
+
+# Clear legal categorization: Bureau metadata vs. Consumer-authored narrative submissions
+CFPB_GOV_LICENSE = "Public Domain (US Government Work for Bureau Metadata); User-Consented Public Record (Narratives)"
+CFPB_LICENSE_STATUS_NOTES = "Bureau metadata is a US Government Work. Consumer-authored narratives are third-party submissions disclosed pursuant to affirmative opt-in consumer consent (80 FR 15572) and FOIA reading room rules; downstream commercial reuse terms require verification."
+
 CC_BY_4_LICENSE = "CC BY 4.0"
 CC_BY_4_URL = "https://github.com/PolyAI-LDN/task-specific-datasets/blob/master/LICENSE"
 
@@ -121,7 +126,7 @@ OVERLAP_COLUMNS = [
 def build_inventory_rows():
     rows = []
 
-    # 1. BANKING77 components
+    # 1. BANKING77 components (empirically inspected)
     b77_train = {
         "source_dataset": "BANKING77",
         "source_url": "https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/master/banking_data/train.csv",
@@ -190,7 +195,7 @@ def build_inventory_rows():
     }
     rows.extend([b77_train, b77_test, b77_cat])
 
-    # 2. CFPB Active Daily Bulk Dump (complaints.csv.zip)
+    # 2. CFPB Active Daily Bulk Dump (complaints.csv.zip, empirically inspected)
     cfpb_bulk = {
         "source_dataset": "CFPB Consumer Complaint Database (Active Daily Feed)",
         "source_url": "https://files.consumerfinance.gov/ccdb/complaints.csv.zip",
@@ -200,18 +205,18 @@ def build_inventory_rows():
         "source_version": "live_daily_snapshot",
         "release_date": "2026-10-28",
         "retrieval_date": "2026-10-21",
-        "license": PUBLIC_DOMAIN_LICENSE,
-        "license_url": PUBLIC_DOMAIN_URL,
+        "license": "Public Domain (US Government Work)",
+        "license_url": CFPB_READING_ROOM_URL,
         "checksum_sha256": "9ae94df79f82a8e84b9b3e22bf8951f8c02489b88f5c4fa9ee32a95e1df760a1",
         "rows": "unknown",
-        "columns": "15",
+        "columns": "15 (observed)",
         "split": "all",
         "language": "en",
         "domain": "finance",
         "role_decision": "ineligible_lacks_narratives",
-        "decision_rationale": "Bulk complaint tracking feed across 5.6 GB uncompressed CSV; stripped of 'Consumer complaint narrative' column following CFPB August 2026 cessation of live narrative publication. Ineligible for narrative modeling.",
+        "decision_rationale": "Bulk complaint tracking feed across 5.6 GB uncompressed CSV; empirically confirmed that 'Consumer complaint narrative' column was dropped following CFPB August 2026 cessation of live narrative publication. Ineligible for narrative modeling.",
         "status": "verified_acquired",
-        "notes": "Archived in data/raw/cfpb (356,704,969 bytes). Contains 15 columns; lacks consumer narrative text entirely.",
+        "notes": "Archived in data/raw/cfpb (356,704,969 bytes). Contains 15 observed columns; lacks consumer narrative text entirely.",
     }
     rows.append(cfpb_bulk)
 
@@ -222,24 +227,25 @@ def build_inventory_rows():
         size_b = meta.get("content_length", 0)
 
         if num == 2:
-            # Local reference baseline
+            # Local reference baseline (empirically inspected)
             local_path = f"data/raw/cfpb/{fname}"
             sha256 = "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45"
-            rows_str = "1041632"
-            cols_str = "16"
+            rows_str = "1041632 (measured)"
+            cols_str = "16 (observed)"
             role = "primary_eligible"
             status = "verified_acquired"
-            notes = f"Primary project reference baseline snapshot. Official CFPB FOIA archive containing 439,860 verified consumer complaint narratives across 1,041,632 records (782.8 MB uncompressed). Verified SHA-256: {sha256}."
+            notes = f"Primary project reference baseline snapshot. Official CFPB FOIA archive containing 439,860 verified consumer complaint narratives across 1,041,632 records (782.8 MB uncompressed). Verified SHA-256: {sha256}. {CFPB_LICENSE_STATUS_NOTES}"
             retrieval_date = "2026-10-21"
             rationale = "Authentic consumer complaints filed with CFPB with unedited narratives across 9 financial products (May 2018 - Apr 2021)."
         else:
+            # Unfetched remote archives (distinguish observed vs unverified)
             local_path = "unfetched"
             sha256 = "unfetched"
-            rows_str = "unknown"
-            cols_str = "16"
+            rows_str = "unverified_unfetched"
+            cols_str = "16 (reported, unverified)"
             role = "primary_eligible"
             status = "unfetched_remote_archive"
-            notes = f"Official CFPB FOIA reading room archive ({window_label}). HTTP 200 verified ({size_b:,} bytes compressed). Last-Modified: {meta.get('last_modified', 'unknown')}. ETag: {meta.get('etag', 'unknown')}."
+            notes = f"Official CFPB FOIA reading room archive ({window_label}). HTTP 200 verified ({size_b:,} bytes compressed). Last-Modified: {meta.get('last_modified', 'unknown')}. ETag: {meta.get('etag', 'unknown')}. Schema and record counts unverified until fetched. {CFPB_LICENSE_STATUS_NOTES}"
             retrieval_date = "unfetched"
             rationale = f"Eligible historical consumer complaint narratives for temporal shift evaluation ({window_label}). Unfetched to preserve disk budget."
 
@@ -252,8 +258,8 @@ def build_inventory_rows():
             "source_version": f"export_window_{num}",
             "release_date": "2026-09-14",
             "retrieval_date": retrieval_date,
-            "license": PUBLIC_DOMAIN_LICENSE,
-            "license_url": PUBLIC_DOMAIN_URL,
+            "license": CFPB_GOV_LICENSE,
+            "license_url": CFPB_TERMS_URL,
             "checksum_sha256": sha256,
             "rows": rows_str,
             "columns": cols_str,
@@ -284,17 +290,21 @@ def build_overlap_rows():
         duration_days = (d2 - d1).days + 1
 
         if num == 2:
-            overlap_count = 1041632
-            overlap_pct = 100.0
+            overlap_count = "1041632 (measured)"
+            overlap_pct = "100.00% (measured)"
             relationship = "reference_baseline_active"
             role = "reference_baseline_active"
+            has_narr = "True (observed)"
+            col_count = "16 (observed)"
             notes = "Active project reference baseline. Contains 1,041,632 total complaint records, 439,860 verified narrative records, yielding 45,723 canonical instances across 9 product domains."
         else:
-            overlap_count = 0
-            overlap_pct = 0.0
-            relationship = "strictly_disjoint_window"
+            overlap_count = "unmeasured_unfetched"
+            overlap_pct = "unmeasured_unfetched"
+            relationship = "temporally_disjoint_window_id_overlap_unmeasured"
             role = "primary_eligible_unfetched"
-            notes = f"Chronologically disjoint slice ({window_label}). Zero date overlap with May 2018–April 2021 window; pairwise record ID overlap with Export 2 is strictly 0."
+            has_narr = "reported_unverified"
+            col_count = "unverified_unfetched"
+            notes = f"Chronologically disjoint calendar window ({window_label}). Temporal overlap is 0 days by window dates. Empirical record-ID overlap against Export 2 is unmeasured because file remains unfetched to preserve disk budget."
 
         row = {
             "release_id": f"CCDB_Export_{num:02d}",
@@ -305,17 +315,17 @@ def build_overlap_rows():
             "window_end_date": end_d,
             "window_duration_days": duration_days,
             "compressed_size_bytes": size_b,
-            "has_narratives": "True",
-            "column_count": 16,
+            "has_narratives": has_narr,
+            "column_count": col_count,
             "export2_id_overlap_count": overlap_count,
-            "export2_id_overlap_pct": f"{overlap_pct:.2f}%",
+            "export2_id_overlap_pct": overlap_pct,
             "overlap_relationship": relationship,
             "role_decision": role,
             "notes": notes,
         }
         rows.append(row)
 
-    # 2. CFPB Active Daily Bulk Dump
+    # 2. CFPB Active Daily Bulk Dump (empirically inspected)
     cfpb_bulk_row = {
         "release_id": "CCDB_Bulk_Complaints",
         "source_name": "CFPB Consumer Complaint Database (Active Bulk Feed)",
@@ -325,17 +335,17 @@ def build_overlap_rows():
         "window_end_date": "2026-10-28",
         "window_duration_days": (datetime(2026, 10, 28) - datetime(2011, 12, 1)).days + 1,
         "compressed_size_bytes": 356704969,
-        "has_narratives": "False",
-        "column_count": 15,
-        "export2_id_overlap_count": 1041632,
-        "export2_id_overlap_pct": "100.00%",
+        "has_narratives": "False (observed)",
+        "column_count": "15 (observed)",
+        "export2_id_overlap_count": "measured_superset_contains_export2_ids",
+        "export2_id_overlap_pct": "measured_superset_contains_export2_ids",
         "overlap_relationship": "metadata_only_superset",
         "role_decision": "ineligible_lacks_narratives",
-        "notes": "Full database metadata superset. Verified to contain Export 2 IDs (e.g. Complaint ID 3109824), but lacks 'Consumer complaint narrative' column entirely (15 columns vs 16 in FOIA archives). Ineligible for narrative modeling.",
+        "notes": "Full database metadata superset across 5.6 GB uncompressed CSV. Empirically verified to contain Export 2 IDs (e.g. Complaint ID 3109824), but lacks 'Consumer complaint narrative' column entirely (15 columns vs 16 in FOIA archives). Ineligible for narrative modeling.",
     }
     rows.append(cfpb_bulk_row)
 
-    # 3. BANKING77 components
+    # 3. BANKING77 components (empirically inspected)
     b77_train_row = {
         "release_id": "BANKING77_Train",
         "source_name": "PolyAI BANKING77",
@@ -345,9 +355,9 @@ def build_overlap_rows():
         "window_end_date": "N/A",
         "window_duration_days": "N/A",
         "compressed_size_bytes": 839073,
-        "has_narratives": "False",
-        "column_count": 2,
-        "export2_id_overlap_count": 0,
+        "has_narratives": "False (observed)",
+        "column_count": "2 (observed)",
+        "export2_id_overlap_count": "0 (isolated)",
         "export2_id_overlap_pct": "0.00%",
         "overlap_relationship": "isolated_benchmark",
         "role_decision": "auxiliary_only",
@@ -362,9 +372,9 @@ def build_overlap_rows():
         "window_end_date": "N/A",
         "window_duration_days": "N/A",
         "compressed_size_bytes": 239961,
-        "has_narratives": "False",
-        "column_count": 2,
-        "export2_id_overlap_count": 0,
+        "has_narratives": "False (observed)",
+        "column_count": "2 (observed)",
+        "export2_id_overlap_count": "0 (isolated)",
         "export2_id_overlap_pct": "0.00%",
         "overlap_relationship": "isolated_benchmark",
         "role_decision": "auxiliary_only",

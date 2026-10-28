@@ -3,14 +3,14 @@
 Enforces:
 1. Exact 20-column schema for data/manifests/dataset_inventory.csv.
 2. Complete catalog of all 21 CFPB FOIA narrative archive windows, bulk complaints, and BANKING77.
-3. Strict chronological window contiguity (2011-12-01 to 2026-08-14) with zero gaps and zero overlap.
-4. Release overlap report schema and zero pairwise record-ID overlap against Export 2.
-5. Schema discrepancy enforcement: 16 columns (with narrative) in FOIA archives vs 15 columns (without narrative) in active bulk.
+3. Strict chronological window contiguity (2011-12-01 to 2026-08-14) with zero temporal gaps.
+4. Release overlap report schema and strict distinction between observed vs unmeasured ID overlap.
+5. Schema discrepancy enforcement: 16 columns (with narrative) observed in baseline Export 2
+   vs 15 columns (without narrative) observed in active bulk complaints.csv.zip.
 6. Cryptographic integrity of local baseline archive.
-7. Verification of source terms and governance documentation.
+7. Verification of source terms, consent disclosures, and governance documentation.
 """
 
-import csv
 import hashlib
 import os
 import unittest
@@ -22,6 +22,7 @@ INVENTORY_CSV = os.path.join(REPO_ROOT, "data", "manifests", "dataset_inventory.
 OVERLAP_CSV = os.path.join(REPO_ROOT, "data", "manifests", "release_overlap_report.csv")
 DOCS_PROVENANCE = os.path.join(REPO_ROOT, "docs", "source_terms_and_provenance.md")
 LOCAL_EXPORT_2 = os.path.join(REPO_ROOT, "data", "raw", "cfpb", "CCDB_Export_2_May_2018_through_April_2021.zip")
+LOCAL_BULK = os.path.join(REPO_ROOT, "data", "raw", "cfpb", "complaints.csv.zip")
 
 REQUIRED_INVENTORY_COLUMNS = [
     "source_dataset",
@@ -72,6 +73,7 @@ class TestPhase1Provenance(unittest.TestCase):
         assert os.path.exists(OVERLAP_CSV), f"Missing {OVERLAP_CSV}"
         assert os.path.exists(DOCS_PROVENANCE), f"Missing {DOCS_PROVENANCE}"
         assert os.path.exists(LOCAL_EXPORT_2), f"Missing {LOCAL_EXPORT_2}"
+        assert os.path.exists(LOCAL_BULK), f"Missing {LOCAL_BULK}"
 
         cls.df_inventory = pd.read_csv(INVENTORY_CSV)
         cls.df_overlap = pd.read_csv(OVERLAP_CSV)
@@ -103,7 +105,7 @@ class TestPhase1Provenance(unittest.TestCase):
         self.assertEqual(len(bulk_entries), 1, "Expected 1 active bulk complaints entry")
 
     def test_03_cfpb_foia_metadata_integrity(self):
-        """Verifies URLs, public domain licensing, and status of FOIA narrative archives."""
+        """Verifies URLs, opt-in disclosure licensing notes, and status of FOIA narrative archives."""
         foia_rows = self.df_inventory[
             self.df_inventory["source_dataset"].str.contains("FOIA", case=False, na=False)
         ]
@@ -113,18 +115,17 @@ class TestPhase1Provenance(unittest.TestCase):
                 f"Invalid URL for {row['file_name']}: {row['source_url']}",
             )
             self.assertEqual(row["file_format"], "csv.zip")
-            self.assertEqual(row["license"], "Public Domain (US Government Work)")
+            self.assertIn("Public Domain", row["license"])
+            self.assertIn("User-Consented Public Record", row["license"])
             self.assertEqual(row["role_decision"], "primary_eligible")
 
-    def test_04_chronological_windows_contiguity_and_zero_overlap(self):
-        """Ensures that the 21 export windows strictly connect day-to-day from 2011-12-01 to 2026-08-14 with zero gaps."""
+    def test_04_chronological_windows_contiguity_and_zero_temporal_overlap(self):
+        """Ensures that the 21 export windows strictly connect day-to-day from 2011-12-01 to 2026-08-14 with zero temporal gaps."""
         foia_overlap = self.df_overlap[self.df_overlap["release_id"].str.startswith("CCDB_Export_")].copy()
         self.assertEqual(len(foia_overlap), 21)
 
-        # Sort by release_id
         foia_overlap = foia_overlap.sort_values("release_id").reset_index(drop=True)
 
-        # Verify start of first window and end of last window
         self.assertEqual(foia_overlap.iloc[0]["window_start_date"], "2011-12-01")
         self.assertEqual(foia_overlap.iloc[-1]["window_end_date"], "2026-08-14")
 
@@ -149,39 +150,41 @@ class TestPhase1Provenance(unittest.TestCase):
         )
         self.assertEqual(len(self.df_overlap), 24, f"Expected 24 overlap rows, got {len(self.df_overlap)}")
 
-    def test_06_release_overlap_invariants(self):
-        """Verifies pairwise overlap with baseline snapshot (CCDB_Export_02)."""
+    def test_06_release_overlap_distinguishes_observed_vs_unmeasured(self):
+        """Enforces that measured releases report measured metrics, while unfetched releases remain unmeasured."""
         for _, row in self.df_overlap.iterrows():
             rel_id = row["release_id"]
             if rel_id == "CCDB_Export_02":
-                self.assertEqual(row["export2_id_overlap_count"], 1041632)
-                self.assertEqual(row["export2_id_overlap_pct"], "100.00%")
+                # Empirically measured local baseline
+                self.assertIn("1041632", str(row["export2_id_overlap_count"]))
                 self.assertEqual(row["overlap_relationship"], "reference_baseline_active")
             elif rel_id.startswith("CCDB_Export_"):
-                self.assertEqual(
-                    row["export2_id_overlap_count"],
-                    0,
-                    f"Non-zero overlap in disjoint window {rel_id}: {row['export2_id_overlap_count']}",
-                )
-                self.assertEqual(row["export2_id_overlap_pct"], "0.00%")
-                self.assertEqual(row["overlap_relationship"], "strictly_disjoint_window")
+                # Unfetched archives: temporal overlap is 0 by dates, but record ID overlap is explicitly unmeasured
+                self.assertEqual(row["export2_id_overlap_count"], "unmeasured_unfetched")
+                self.assertEqual(row["export2_id_overlap_pct"], "unmeasured_unfetched")
+                self.assertEqual(row["overlap_relationship"], "temporally_disjoint_window_id_overlap_unmeasured")
             elif rel_id == "CCDB_Bulk_Complaints":
                 self.assertEqual(row["overlap_relationship"], "metadata_only_superset")
             elif rel_id.startswith("BANKING77"):
-                self.assertEqual(row["export2_id_overlap_count"], 0)
                 self.assertEqual(row["overlap_relationship"], "isolated_benchmark")
 
     def test_07_narrative_column_discrepancy(self):
-        """Enforces schema difference: 16 columns with narrative in FOIA vs 15 columns without narrative in bulk."""
+        """Enforces observed schema difference: 16 columns in baseline Export 2 vs 15 columns in active bulk."""
         bulk_row = self.df_overlap[self.df_overlap["release_id"] == "CCDB_Bulk_Complaints"].iloc[0]
-        self.assertEqual(bulk_row["column_count"], 15)
-        self.assertEqual(str(bulk_row["has_narratives"]), "False")
+        self.assertIn("15", str(bulk_row["column_count"]))
+        self.assertIn("False", str(bulk_row["has_narratives"]))
         self.assertEqual(bulk_row["role_decision"], "ineligible_lacks_narratives")
 
-        foia_rows = self.df_overlap[self.df_overlap["release_id"].str.startswith("CCDB_Export_")]
-        for _, row in foia_rows.iterrows():
-            self.assertEqual(row["column_count"], 16)
-            self.assertEqual(str(row["has_narratives"]), "True")
+        exp2_row = self.df_overlap[self.df_overlap["release_id"] == "CCDB_Export_02"].iloc[0]
+        self.assertIn("16", str(exp2_row["column_count"]))
+        self.assertIn("True", str(exp2_row["has_narratives"]))
+
+        unfetched_foia = self.df_overlap[
+            (self.df_overlap["release_id"].str.startswith("CCDB_Export_")) & (self.df_overlap["release_id"] != "CCDB_Export_02")
+        ]
+        for _, row in unfetched_foia.iterrows():
+            self.assertEqual(row["column_count"], "unverified_unfetched")
+            self.assertEqual(row["has_narratives"], "reported_unverified")
 
     def test_08_local_baseline_sha256(self):
         """Verifies cryptographic hash of local baseline archive matches inventory."""
@@ -194,19 +197,17 @@ class TestPhase1Provenance(unittest.TestCase):
         self.assertEqual(actual_hash, expected_hash, f"Baseline hash mismatch: {actual_hash} vs {expected_hash}")
 
     def test_09_docs_provenance_content(self):
-        """Verifies that docs/source_terms_and_provenance.md contains key required sections."""
+        """Verifies that docs/source_terms_and_provenance.md contains key required sections addressing reviewer points."""
         with open(DOCS_PROVENANCE, "r", encoding="utf-8") as f:
             content = f.read()
 
         required_snippets = [
             "FOIA Electronic Reading Room",
-            "Public Domain (United States Government Work)",
-            "17 U.S.C. § 105",
-            "August 14, 2026",
-            "CCDB_Export_01",
-            "CCDB_Export_21",
-            "Mathematical Proof",
-            "strictly contiguous",
+            "Consumer Narrative Submission Terms",
+            "80 FR 15572",
+            "needs_verification",
+            "temporally disjoint",
+            "unmeasured_unfetched",
             "BANKING77",
             "Indian Multilingual Evaluation Gap",
         ]
