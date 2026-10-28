@@ -56,10 +56,10 @@
 ### A. Properties Empirically Verified by Current Audit:
 1. **Programmatic Test Execution:**  
    The integrity test suite (`tests/data/test_data_integrity.py`) was executed programmatically during this audit run:
-   * **Tests executed:** 8
+   * **Tests executed:** 9
    * **Failures:** 0
    * **Errors:** 0
-   * **Test Suite Result:** PASSED (All 8 tests succeeded)
+   * **Test Suite Result:** PASSED (All 9 tests succeeded)
 2. **Mathematical Partition Invariants (Independently Computed & Dynamically Derived):**
    * **Example ID Exclusivity:**
      * Train $\cap$ Val: 0 overlapping IDs — **PASSED**

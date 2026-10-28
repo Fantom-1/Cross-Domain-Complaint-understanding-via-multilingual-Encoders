@@ -379,6 +379,61 @@ Execution halted because a required baseline file failed schema ingestion.
         with open(os.path.join(ROOT_DIR, "docs/baseline_snapshot_inventory.md"), "w", encoding="utf-8") as f:
             f.write(blocked_report)
         return False
+        
+    # 3.1 Validate required columns & non-nullness explicitly before indexing (Finding 1)
+    REQUIRED_CANONICAL_INDEX_COLS = ["example_id", "text_normalized", "intent_label", "domain"]
+    REQUIRED_SPLIT_INDEX_COLS = ["example_id", "label", "group_id"]
+    
+    schema_failures = []
+    for col in REQUIRED_CANONICAL_INDEX_COLS:
+        if col not in df_canonical.columns:
+            schema_failures.append(f"canonical_dataset.parquet missing required index column '{col}'")
+            
+    for s_name, s_df in [("baseline_train.csv", df_train), ("baseline_validation.csv", df_val), ("baseline_test.csv", df_test)]:
+        for col in REQUIRED_SPLIT_INDEX_COLS:
+            if col not in s_df.columns:
+                schema_failures.append(f"{s_name} missing required index column '{col}'")
+                
+    if schema_failures:
+        print(f"CRITICAL ERROR: Schema validation failed: {schema_failures}")
+        blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
+
+**Audit Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Status:** BLOCKED / SCHEMA_VALIDATION_FAILURE  
+
+### Missing Required Columns:
+{chr(10).join(f"- `{f}`" for f in schema_failures)}
+
+Execution halted because one or more datasets are missing mandatory index columns required for invariant computation.
+"""
+        with open(os.path.join(ROOT_DIR, "docs/baseline_snapshot_inventory.md"), "w", encoding="utf-8") as f:
+            f.write(blocked_report)
+        return False
+        
+    # Check for null keys that could undermine set-based leakage checks
+    null_key_failures = []
+    if df_canonical["example_id"].isna().any(): null_key_failures.append("Null example_id in canonical_dataset.parquet")
+    if df_canonical["intent_label"].isna().any(): null_key_failures.append("Null intent_label in canonical_dataset.parquet")
+    for s_name, s_df in [("baseline_train.csv", df_train), ("baseline_validation.csv", df_val), ("baseline_test.csv", df_test)]:
+        if s_df["example_id"].isna().any(): null_key_failures.append(f"Null example_id in {s_name}")
+        if s_df["group_id"].isna().any(): null_key_failures.append(f"Null group_id in {s_name}")
+        if s_df["label"].isna().any(): null_key_failures.append(f"Null label in {s_name}")
+        
+    if null_key_failures:
+        print(f"CRITICAL ERROR: Null key identifiers detected: {null_key_failures}")
+        blocked_report = f"""# Baseline Snapshot Inventory — BLOCKED
+
+**Audit Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Status:** BLOCKED / NULL_KEY_IDENTIFIERS  
+
+### Null Identifiers Detected:
+{chr(10).join(f"- `{f}`" for f in null_key_failures)}
+
+Execution halted because null key or grouping identifiers undermine set-based leakage checks.
+"""
+        with open(os.path.join(ROOT_DIR, "docs/baseline_snapshot_inventory.md"), "w", encoding="utf-8") as f:
+            f.write(blocked_report)
+        return False
     
     # 4. Programmatically run integrity test suite
     test_suite_res = run_programmatic_integrity_tests()
@@ -510,6 +565,9 @@ Execution halted because a required baseline file failed schema ingestion.
     label_meta = file_metadata_map.get("data/processed/label_map.json", {})
     split_meta = file_metadata_map.get("data/manifests/split_indomain.csv", {})
 
+    def check_box(passed):
+        return "[x]" if passed else "[ ]"
+
     # Generate baseline_snapshot_inventory.md
     md_baseline = f"""# Baseline Snapshot Inventory — Captured Local Execution Snapshot
 
@@ -540,11 +598,11 @@ Execution halted because a required baseline file failed schema ingestion.
 * **Multi-Pillar Audit Verdict:** {audit_outcome_str}
 
 ### Gate Verification Status:
-* [x] **Partition Invariants:** {'PASSED' if invariants_passed else 'FAILED'}
-* [x] **Data Integrity Test Suite:** {'PASSED' if test_suite_passed else 'FAILED'}
-* [x] **Environment & Library Smoke Tests:** {'PASSED' if smoke_all_passed else 'FAILED'}
-* [x] **Git Hygiene Rules (.gitignore):** {'PASSED' if gitignore_hygiene_passed else 'FAILED'}
-* [x] **Metadata Inspection Integrity:** {'PASSED' if metadata_inspection_passed else 'FAILED'}
+* {check_box(invariants_passed)} **Partition Invariants:** {'PASSED' if invariants_passed else 'FAILED'}
+* {check_box(test_suite_passed)} **Data Integrity Test Suite:** {'PASSED' if test_suite_passed else 'FAILED'}
+* {check_box(smoke_all_passed)} **Environment & Library Smoke Tests:** {'PASSED' if smoke_all_passed else 'FAILED'}
+* {check_box(gitignore_hygiene_passed)} **Git Hygiene Rules (.gitignore):** {'PASSED' if gitignore_hygiene_passed else 'FAILED'}
+* {check_box(metadata_inspection_passed)} **Metadata Inspection Integrity:** {'PASSED' if metadata_inspection_passed else 'FAILED'}
 
 ---
 

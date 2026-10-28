@@ -79,10 +79,24 @@ class TestDataIntegrity(unittest.TestCase):
             cls.label_map = json.load(f)
 
     def test_01_canonical_schema_and_columns(self):
-        """Validates that canonical parquet contains exactly the required columns."""
-        actual_cols = list(self.df_canonical.columns)
-        for col in REQUIRED_CANONICAL_COLUMNS:
-            self.assertIn(col, actual_cols, f"Missing required column {col} in canonical parquet")
+        """Validates that canonical parquet and split CSVs contain exactly the required columns."""
+        actual_canonical_cols = list(self.df_canonical.columns)
+        self.assertEqual(
+            set(actual_canonical_cols), 
+            set(REQUIRED_CANONICAL_COLUMNS),
+            f"Canonical schema mismatch! Extra: {set(actual_canonical_cols) - set(REQUIRED_CANONICAL_COLUMNS)}, Missing: {set(REQUIRED_CANONICAL_COLUMNS) - set(actual_canonical_cols)}"
+        )
+        self.assertEqual(len(actual_canonical_cols), len(REQUIRED_CANONICAL_COLUMNS), "Canonical column count mismatch")
+        
+        # Validate split CSV schemas
+        for split_name, df_s in [("train", self.df_train), ("val", self.df_val), ("test", self.df_test)]:
+            actual_split_cols = list(df_s.columns)
+            self.assertEqual(
+                set(actual_split_cols),
+                set(REQUIRED_SPLIT_COLUMNS),
+                f"{split_name} schema mismatch! Extra: {set(actual_split_cols) - set(REQUIRED_SPLIT_COLUMNS)}, Missing: {set(REQUIRED_SPLIT_COLUMNS) - set(actual_split_cols)}"
+            )
+            self.assertEqual(len(actual_split_cols), len(REQUIRED_SPLIT_COLUMNS), f"{split_name} column count mismatch")
 
     def test_02_unique_example_ids(self):
         """Validates that example_id is strictly unique across canonical dataset."""
@@ -145,6 +159,17 @@ class TestDataIntegrity(unittest.TestCase):
         total_canonical = len(self.df_canonical)
         sum_splits = len(self.df_train) + len(self.df_val) + len(self.df_test)
         self.assertEqual(total_canonical, sum_splits, f"Reconciliation mismatch: canonical has {total_canonical}, sum of splits is {sum_splits}")
+
+    def test_09_non_null_keys_and_groups(self):
+        """Ensures that example_id, group_id, intent_label, and split are non-null across all datasets."""
+        # Canonical assertions
+        for col in ["example_id", "group_id", "intent_label", "split", "domain"]:
+            self.assertFalse(self.df_canonical[col].isna().any(), f"Found null values in canonical column: {col}")
+            
+        # Split CSV assertions
+        for split_name, df_s in [("train", self.df_train), ("val", self.df_val), ("test", self.df_test)]:
+            for col in ["example_id", "group_id", "label", "domain"]:
+                self.assertFalse(df_s[col].isna().any(), f"Found null values in {split_name} column: {col}")
 
 
 if __name__ == "__main__":

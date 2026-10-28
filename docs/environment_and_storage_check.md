@@ -20,7 +20,7 @@
 | Volume Label | Mount / Root Path | Total Capacity | Used Space | Free Space | Free % | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | Workspace Volume (D:) | `D:\NLP` | 200.00 GB | 165.98 GB | 34.02 GB | 17.0% | **Adequate Headroom** |
-| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.76 GB | 29.95 GB | 10.9% | **Adequate Headroom** |
+| System/Temp Volume (C:) | `C:\Users\yashk\AppData\Local\Temp` | 274.72 GB | 244.77 GB | 29.95 GB | 10.9% | **Adequate Headroom** |
 
 ### Storage Budget Analysis:
 1. **Existing Raw Data:**
