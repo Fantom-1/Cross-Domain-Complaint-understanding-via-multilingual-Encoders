@@ -1,0 +1,32 @@
+name: CI Verification
+
+on:
+  push:
+    branches: [ main, DATA_PREPARATION ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas pyyaml requests
+
+      - name: Run Phase 1 Provenance Tests
+        run: |
+          python -m unittest tests/data/test_phase1_provenance.py
+
+      - name: Run Phase 1 Audit
+        run: |
+          python scripts/audit_phase1.py
