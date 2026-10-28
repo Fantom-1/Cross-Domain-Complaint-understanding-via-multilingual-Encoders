@@ -24,9 +24,9 @@ CFPB_FOIA_BASE_URL = "https://files.consumerfinance.gov/f/documents/"
 CFPB_READING_ROOM_URL = "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/"
 CFPB_TERMS_URL = "https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/"
 
-# Clear legal categorization: Bureau metadata vs. Consumer-authored narrative submissions
-CFPB_GOV_LICENSE = "Public Domain (US Government Work for Bureau Metadata); User-Consented Public Record (Narratives)"
-CFPB_LICENSE_STATUS_NOTES = "Bureau metadata is a US Government Work. Consumer-authored narratives are third-party submissions disclosed pursuant to affirmative opt-in consumer consent (80 FR 15572) and FOIA reading room rules; downstream commercial reuse terms require verification."
+# Nuanced legal categorization: Bureau metadata is Public Domain (US Gov Work); Consumer Narratives require verification
+CFPB_NARRATIVE_LICENSE = "needs_verification (Consumer Narratives); Public Domain (Bureau Metadata)"
+CFPB_LICENSE_STATUS_NOTES = "Bureau metadata is a US Government Work under 17 U.S.C. § 105. Consumer-authored narratives are third-party grievances disclosed pursuant to affirmative opt-in consumer consent (80 FR 15572); downstream commercial and reuse rights remain unverified / needs_verification."
 
 CC_BY_4_LICENSE = "CC BY 4.0"
 CC_BY_4_URL = "https://github.com/PolyAI-LDN/task-specific-datasets/blob/master/LICENSE"
@@ -195,15 +195,15 @@ def build_inventory_rows():
     }
     rows.extend([b77_train, b77_test, b77_cat])
 
-    # 2. CFPB Active Daily Bulk Dump (complaints.csv.zip, empirically inspected)
+    # 2. CFPB Active Daily Bulk Dump (complaints.csv.zip, empirically inspected snapshot acquired 2026-10-21)
     cfpb_bulk = {
         "source_dataset": "CFPB Consumer Complaint Database (Active Daily Feed)",
         "source_url": "https://files.consumerfinance.gov/ccdb/complaints.csv.zip",
         "local_path": "data/raw/cfpb/complaints.csv.zip",
         "file_name": "complaints.csv.zip",
         "file_format": "csv.zip",
-        "source_version": "live_daily_snapshot",
-        "release_date": "2026-10-28",
+        "source_version": "snapshot_2026-10-21",
+        "release_date": "2026-10-21",
         "retrieval_date": "2026-10-21",
         "license": "Public Domain (US Government Work)",
         "license_url": CFPB_READING_ROOM_URL,
@@ -216,7 +216,7 @@ def build_inventory_rows():
         "role_decision": "ineligible_lacks_narratives",
         "decision_rationale": "Bulk complaint tracking feed across 5.6 GB uncompressed CSV; empirically confirmed that 'Consumer complaint narrative' column was dropped following CFPB August 2026 cessation of live narrative publication. Ineligible for narrative modeling.",
         "status": "verified_acquired",
-        "notes": "Archived in data/raw/cfpb (356,704,969 bytes). Contains 15 observed columns; lacks consumer narrative text entirely.",
+        "notes": "Archived in data/raw/cfpb (356,704,969 bytes, acquired 2026-10-21). Contains 15 observed columns; lacks consumer narrative text entirely.",
     }
     rows.append(cfpb_bulk)
 
@@ -258,7 +258,7 @@ def build_inventory_rows():
             "source_version": f"export_window_{num}",
             "release_date": "2026-09-14",
             "retrieval_date": retrieval_date,
-            "license": CFPB_GOV_LICENSE,
+            "license": CFPB_NARRATIVE_LICENSE,
             "license_url": CFPB_TERMS_URL,
             "checksum_sha256": sha256,
             "rows": rows_str,
@@ -332,8 +332,8 @@ def build_overlap_rows():
         "file_name": "complaints.csv.zip",
         "source_url": "https://files.consumerfinance.gov/ccdb/complaints.csv.zip",
         "window_start_date": "2011-12-01",
-        "window_end_date": "2026-10-28",
-        "window_duration_days": (datetime(2026, 10, 28) - datetime(2011, 12, 1)).days + 1,
+        "window_end_date": "2026-10-21",
+        "window_duration_days": (datetime(2026, 10, 21) - datetime(2011, 12, 1)).days + 1,
         "compressed_size_bytes": 356704969,
         "has_narratives": "False (observed)",
         "column_count": "15 (observed)",
@@ -341,7 +341,7 @@ def build_overlap_rows():
         "export2_id_overlap_pct": "measured_superset_contains_export2_ids",
         "overlap_relationship": "metadata_only_superset",
         "role_decision": "ineligible_lacks_narratives",
-        "notes": "Full database metadata superset across 5.6 GB uncompressed CSV. Empirically verified to contain Export 2 IDs (e.g. Complaint ID 3109824), but lacks 'Consumer complaint narrative' column entirely (15 columns vs 16 in FOIA archives). Ineligible for narrative modeling.",
+        "notes": "Full database metadata superset across 5.6 GB uncompressed CSV (2026-10-21 snapshot). Empirically verified to contain Export 2 IDs (e.g. Complaint ID 3109824), but lacks 'Consumer complaint narrative' column entirely (15 columns vs 16 in FOIA archives). Ineligible for narrative modeling.",
     }
     rows.append(cfpb_bulk_row)
 
