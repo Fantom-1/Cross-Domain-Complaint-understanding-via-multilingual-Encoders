@@ -44,7 +44,7 @@ The table below contrasts the 16-column FOIA Reading Room schema against the 15-
 
 ### 3.1 The August 14, 2026 Narrative Deprecation
 * **Observation:** The CFPB ceased public publication of newly submitted consumer complaint narratives on August 14, 2026.
-* **Schema Consequence:** The active bulk feed `complaints.csv.zip` dropped column 6 (`Consumer complaint narrative`) entirely. Consequently, rows in `complaints.csv` have 15 columns rather than 16.
+* **Schema Consequence:** The active bulk feed `complaints.csv.zip` dropped column 6 (`Consumer complaint narrative`) entirely. Consequently, rows in `complaints.csv` have 15 columns rather than 16 columns.
 * **Downstream Research Guardrail:** The active bulk export is formally ineligible for text-based NLP classification models. The 21 static FOIA Reading Room archives remain the exclusive authoritative source for authentic consumer narrative text.
 
 ### 3.2 High-Cardinality Field Variations
