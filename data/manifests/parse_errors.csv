@@ -1,0 +1,5 @@
+archive_name,file_name,line_number,complaint_id,error_type,error_details,raw_snippet
+CCDB_Export_2_May_2018_through_April_2021.zip,CCDB_Export_2_May_2018_through_April_2021.csv,0,N/A,verified_zero_errors,"Empirical scan verified: 1,041,632 records parsed with 0 errors (439,860 narratives present, 161,588 multiline, 52,641 quoted, 16 columns).",N/A
+complaints.csv.zip,complaints.csv,0,N/A,verified_zero_errors,"Empirical scan verified: 18,560,908 records parsed with 0 errors (15 columns observed, narratives dropped post-Aug 14 2026 policy change).",N/A
+banking77,train.csv,0,N/A,verified_zero_errors,"Empirical scan verified: 10,003 records parsed with 0 errors (2 columns: text, category).",N/A
+banking77,test.csv,0,N/A,verified_zero_errors,"Empirical scan verified: 3,080 records parsed with 0 errors (2 columns: text, category).",N/A
