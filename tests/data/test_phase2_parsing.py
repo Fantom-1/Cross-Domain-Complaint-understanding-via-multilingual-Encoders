@@ -65,21 +65,39 @@ class TestPhase2Parsing(unittest.TestCase):
         self.assertEqual(second["Consumer complaint narrative"], "Single line narrative.")
 
     def test_03_schema_mismatch_detection(self):
-        """Asserts that mismatched schemas are detected and handled per policy."""
+        """Asserts that mismatched schemas are rejected in record/raise modes and captured in diagnostics."""
         bad_header_csv = io.StringIO(
             'ColA,ColB,ColC\n'
             '1,2,3\n'
         )
         
-        # Policy 'raise'
-        with self.assertRaises(CSVParseError):
+        # Policy 'raise': Must raise CSVParseError detailing expected vs observed columns
+        with self.assertRaises(CSVParseError) as ctx:
             list(stream_complaints(bad_header_csv, expected_columns=CFPB_FOIA_COLUMNS, on_error="raise"))
+        self.assertIn("Schema mismatch", str(ctx.exception))
+        self.assertIn("Expected 16 columns", str(ctx.exception))
+        self.assertIn("got 3 columns", str(ctx.exception))
         
-        # Default policy yields without crashing if on_error != 'raise'
+        # Default policy 'record': Must reject the source stream (yield 0 rows) and record schema diagnostic
         bad_header_csv.seek(0)
-        rows = list(stream_complaints(bad_header_csv, expected_columns=CFPB_FOIA_COLUMNS, on_error="record"))
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0], {"ColA": "1", "ColB": "2", "ColC": "3"})
+        diag = ParserDiagnostics(archive_path="test_bad.csv", file_name="test_bad.csv")
+        rows = list(stream_complaints(bad_header_csv, expected_columns=CFPB_FOIA_COLUMNS, diagnostics=diag, on_error="record"))
+        self.assertEqual(len(rows), 0, "Default record mode must reject incompatible feed and yield 0 rows")
+        self.assertEqual(diag.error_rows, 1)
+        self.assertEqual(len(diag.errors), 1)
+        err = diag.errors[0]
+        self.assertEqual(err.error_type, "schema_mismatch")
+        self.assertIn("Expected 16 columns", err.error_details)
+        self.assertIn("got 3 columns", err.error_details)
+        self.assertIn("Expected=", err.raw_snippet)
+        self.assertIn("Observed=", err.raw_snippet)
+        
+        # Explicit opt-in 'permissive' mode allows parsing
+        bad_header_csv.seek(0)
+        permissive_rows = list(stream_complaints(bad_header_csv, expected_columns=CFPB_FOIA_COLUMNS, on_error="permissive"))
+        self.assertEqual(len(permissive_rows), 1)
+        self.assertEqual(permissive_rows[0], {"ColA": "1", "ColB": "2", "ColC": "3"})
+
 
     def test_04_malformed_row_diagnostic_recording(self):
         """Asserts that malformed rows (wrong column count) are captured in diagnostics."""
@@ -173,6 +191,48 @@ class TestPhase2Parsing(unittest.TestCase):
         for r in rows:
             self.assertNotEqual(r["text"], "")
             self.assertNotEqual(r["category"], "")
+
+    def test_09_audit_report_dynamic_failure_reflection(self):
+        """Asserts that audit report summary dynamically reflects failed pillars rather than hardcoding PASS."""
+        if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
+            # Avoid recursive audit runner invocation inside Pillar 6 test suite
+            return
+            
+        from scripts.audit_phase2 import run_phase2_audit
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_report_path = os.path.join(tmp_dir, "test_audit_report.md")
+            
+            # Force Pillar 1 failure
+            success = run_phase2_audit(report_path=test_report_path, force_pillar_fail=1)
+            self.assertFalse(success, "Audit must return False when a pillar fails")
+            
+            self.assertTrue(os.path.isfile(test_report_path))
+            with open(test_report_path, "r", encoding="utf-8") as f:
+                report_content = f.read()
+                
+            self.assertIn("Overall Verdict:** **FAILED**", report_content)
+            # Assert summary table contains explicit FAIL for Pillar 1
+            self.assertRegex(
+                report_content,
+                r"\|\s*\*\*1\.\s*Storage Preflight\*\*\s*\|\s*Disk space availability\s*\|\s*FAIL\s*\|",
+                "Summary table must dynamically display FAIL for the failed pillar"
+            )
+
+    def test_10_parse_errors_manifest_provenance_metadata(self):
+        """Asserts that parse_errors.csv ties records to verified source checksums and scan provenance."""
+        manifest_path = os.path.join(REPO_ROOT, "data", "manifests", "parse_errors.csv")
+        self.assertTrue(os.path.isfile(manifest_path))
+        
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            reader = list(csv.DictReader(f))
+            self.assertGreaterEqual(len(reader), 4)
+            
+            for row in reader:
+                self.assertEqual(row["error_type"], "verified_zero_errors")
+                details = row["error_details"]
+                self.assertIn("SHA-256:", details, "Must anchor scan evidence with SHA-256 checksum")
+                self.assertIn("Local Full-Scan Evidence", details, "Must distinguish local full scan from CI")
+
 
 
 if __name__ == "__main__":

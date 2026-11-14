@@ -99,3 +99,10 @@ Full empirical scans were executed across all available local datasets using `sr
 
 > [!NOTE]
 > All 19,615,623 scanned records across all files parsed with **zero column count mismatches, zero unescaped delimiter errors, and zero decoding crashes**.
+
+### 5.1 Local Full-Scan Verification Evidence vs. CI Verification Gate
+
+To prevent ambiguity regarding verification scope:
+1. **Developer Workstation Full-Scan Evidence:** The 19.6M record full scan is conducted on the developer workstation against verified local raw archives anchored to immutable SHA-256 checksums (`CCDB_Export_2`: `4b33ffc92fa0...`, `complaints.csv.zip`: `9ae94df79f...`, `banking77/train.csv`: `b06e26ac...`, `banking77/test.csv`: `d12d6e3b...`).
+2. **GitHub Actions CI Verification Gate:** Because `data/raw/` is untracked in Git (preserving network and disk budgets on ephemeral GitHub runners), CI does not re-download or re-scan full multi-gigabyte source archives. Instead, CI executes programmatic unit test suites (`tests/data/test_phase2_parsing.py`, `tests/data/test_phase1_provenance.py`), validates schema rejection guards against malformed mock streams, checks manifest integrity, and verifies multi-pillar audit gates. Full scan sentinel rows in `data/manifests/parse_errors.csv` are explicitly documented as developer workstation evidence.
+

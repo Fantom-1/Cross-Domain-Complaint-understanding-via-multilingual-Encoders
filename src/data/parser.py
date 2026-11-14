@@ -210,7 +210,11 @@ def stream_complaints(
         inner_csv: Target CSV file name inside ZIP (auto-detected if None).
         expected_columns: Optional expected column names for schema validation.
         max_rows: Maximum records to yield (0 = unlimited).
-        on_error: Policy on malformed rows: 'record' (log & skip), 'raise' (raise CSVParseError), or 'skip'.
+        on_error: Policy on malformed rows:
+            'record' (default): Record diagnostics and reject incompatible feeds / skip malformed rows.
+            'raise': Raise CSVParseError on schema mismatch or malformed rows.
+            'skip': Skip malformed rows; on schema mismatch, reject the feed silently.
+            'permissive': Explicit opt-in mode that allows parsing to continue even if header mismatches.
         diagnostics: Optional ParserDiagnostics instance to collect profiling metrics.
         
     Yields:
@@ -233,13 +237,31 @@ def stream_complaints(
         header = [col.lstrip("\ufeff").strip() for col in raw_header]
         col_count = len(header)
         
-        # Check expected schema if requested
+        # Strict schema validation guard
         if expected_columns is not None:
             expected_list = list(expected_columns)
             if header != expected_list:
-                msg = f"Schema mismatch in {file_name}: Expected {expected_list}, got {header}"
+                msg = f"Schema mismatch in {file_name}: Expected {len(expected_list)} columns {expected_list}, got {len(header)} columns {header}"
+                if diagnostics is not None:
+                    diagnostics.error_rows += 1
+                    diagnostics.errors.append(ParseErrorRecord(
+                        archive_name=archive_name,
+                        file_name=file_name,
+                        line_number=1,
+                        complaint_id="HEADER",
+                        error_type="schema_mismatch",
+                        error_details=msg,
+                        raw_snippet=f"Expected={expected_list} | Observed={header}",
+                    ))
                 if on_error == "raise":
                     raise CSVParseError(msg)
+                elif on_error == "permissive":
+                    # Explicit opt-in permissive mode continues parsing
+                    pass
+                else:
+                    # 'record' (default) and 'skip': Stop and reject source to prevent incompatible feeds entering downstream pipeline
+                    return
+
         
         narrative_idx = header.index("Consumer complaint narrative") if "Consumer complaint narrative" in header else -1
         complaint_id_idx = header.index("Complaint ID") if "Complaint ID" in header else -1
