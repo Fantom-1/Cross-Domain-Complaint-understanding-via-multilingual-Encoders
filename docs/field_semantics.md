@@ -86,3 +86,24 @@ The auxiliary `PolyAI/banking77` dataset is maintained in `data/raw/banking77/` 
    - Null values indicate general non-vulnerable consumer cohort. Stored as empty string `""` without imputation.
 4. **Company Public Response ($47.35\%$):**
    - Null values indicate the company declined to provide an optional public comment. Stored as empty string `""`.
+
+---
+
+## 6. Streaming Parser Error Policies and Permissive Contract
+
+`src/data/parser.py` implements four explicit ingestion policies via `on_error`:
+
+1. **`record` (Strict Default):**
+   - **Header mismatch:** Stops and rejects the feed immediately (yielding 0 records), recording a structured diagnostic error (`error_type="schema_mismatch"`) with expected vs. observed columns and counts.
+   - **Row-level column mismatch:** Skips malformed rows (does not yield them), logs a structured `column_count_mismatch` diagnostic, increments `diagnostics.error_rows`, and never increments `diagnostics.valid_rows`.
+2. **`raise` (Fail-Fast):**
+   - Raises `CSVParseError` immediately upon detecting a header mismatch or any malformed row with incorrect field count.
+3. **`skip` (Silent Skip):**
+   - Stops immediately upon header mismatch; silently skips malformed rows.
+4. **`permissive` (Explicit Opt-In Best-Effort Mode):**
+   - **Header mismatch:** Proceeds parsing under the observed header while recording a diagnostic note.
+   - **Row-level column count mismatch:** Safely handles malformed rows without crashing or corrupting field-to-value mappings:
+     - Too few columns: pads missing columns with empty strings `""` to preserve dictionary key alignment; increments `diagnostics.error_rows` (never `valid_rows`).
+     - Too many columns: maps the base header columns to the first $N$ values and places extra elements into an explicit `_overflow_fields` list; increments `diagnostics.error_rows` (never `valid_rows`).
+     - Indexing is strictly guarded so incidental `IndexError` exceptions cannot occur.
+

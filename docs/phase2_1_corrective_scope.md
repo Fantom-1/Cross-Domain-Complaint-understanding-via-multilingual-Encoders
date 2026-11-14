@@ -8,45 +8,45 @@
 
 ## 1. Parser: strict schema handling and permissive-mode safety
 
-- [ ] Keep strict schema validation as the default. A header mismatch must not silently yield records under an unexpected schema.
-- [ ] Ensure schema rejection records a structured diagnostic containing expected and observed headers/column counts.
-- [ ] Define the contract for explicit `permissive` mode. It must not silently corrupt field-to-value mappings.
-- [ ] Add tests for malformed rows with too few and too many fields when diagnostics are enabled, in both strict and permissive modes.
-- [ ] Ensure malformed records are counted as errors, not valid rows; ensure iteration does not crash with an incidental `IndexError` or similar exception.
-- [ ] Test multiline fields, escaped quotes, commas, UTF-8 BOM, and the 15/16/2-column supported schemas after the changes.
+- [x] Keep strict schema validation as the default. A header mismatch must not silently yield records under an unexpected schema.
+- [x] Ensure schema rejection records a structured diagnostic containing expected and observed headers/column counts.
+- [x] Define the contract for explicit `permissive` mode. It must not silently corrupt field-to-value mappings.
+- [x] Add tests for malformed rows with too few and too many fields when diagnostics are enabled, in both strict and permissive modes.
+- [x] Ensure malformed records are counted as errors, not valid rows; ensure iteration does not crash with an incidental `IndexError` or similar exception.
+- [x] Test multiline fields, escaped quotes, commas, UTF-8 BOM, and the 15/16/2-column supported schemas after the changes.
 
 ## 2. Audit reports: represent verification scope honestly
 
-- [ ] Distinguish `PASS`, `FAIL`, and `NOT RUN / NOT VERIFIED` (or equivalent explicit states) for every audit pillar.
-- [ ] In CI, missing raw archives must not be reported as cryptographically verified. If no hashes were checked, report that fact explicitly rather than presenting a zero-checked result as a successful verification.
-- [ ] Report exact test commands, test counts, failures, errors, and skips. Do not describe tests that were not executed as passing.
-- [ ] Keep Phase 0, Phase 1, and Phase 2 execution scopes distinct. The report must reflect the actual workflow steps and test discovery.
-- [ ] Add regression tests that simulate unavailable raw files, skipped suites, and a failed audit pillar; assert the generated report reflects each condition.
-- [ ] Ensure an audit failure exits non-zero and a skipped/unavailable check cannot be mistaken for a verified pass.
+- [x] Distinguish `PASS`, `FAIL`, and `NOT RUN / NOT VERIFIED` (or equivalent explicit states) for every audit pillar.
+- [x] In CI, missing raw archives must not be reported as cryptographically verified. If no hashes were checked, report that fact explicitly rather than presenting a zero-checked result as a successful verification.
+- [x] Report exact test commands, test counts, failures, errors, and skips. Do not describe tests that were not executed as passing.
+- [x] Keep Phase 0, Phase 1, and Phase 2 execution scopes distinct. The report must reflect the actual workflow steps and test discovery.
+- [x] Add regression tests that simulate unavailable raw files, skipped suites, and a failed audit pillar; assert the generated report reflects each condition.
+- [x] Ensure an audit failure exits non-zero and a skipped/unavailable check cannot be mistaken for a verified pass.
 
 ## 3. Full-scan evidence: reproducibility and provenance
 
-- [ ] Keep developer-workstation full-scan evidence separate from hosted CI test evidence.
-- [ ] Record, in structured manifest fields or a companion manifest, source filename, source SHA-256, scan timestamp (UTC), parser commit/version, command/configuration, environment/runtime, expected schema, record count, valid count, error count, and scan status.
-- [ ] Verify a source checksum against the local artifact before accepting a scan record as verified.
-- [ ] Make it explicit that CI does not download or rescan multi-gigabyte raw archives unless a dedicated CI job actually does so.
-- [ ] Add tests for missing source files, checksum mismatch, incomplete scan metadata, and stale/mismatched parser version.
-- [ ] Do not infer zero errors from a sentinel row alone; the sentinel must be tied to verifiable scan metadata.
+- [x] Keep developer-workstation full-scan evidence separate from hosted CI test evidence.
+- [x] Record, in structured manifest fields or a companion manifest, source filename, source SHA-256, scan timestamp (UTC), parser commit/version, command/configuration, environment/runtime, expected schema, record count, valid count, error count, and scan status.
+- [x] Verify a source checksum against the local artifact before accepting a scan record as verified.
+- [x] Make it explicit that CI does not download or rescan multi-gigabyte raw archives unless a dedicated CI job actually does so.
+- [x] Add tests for missing source files, checksum mismatch, incomplete scan metadata, and stale/mismatched parser version.
+- [x] Do not infer zero errors from a sentinel row alone; the sentinel must be tied to verifiable scan metadata.
 
 ## 4. Documentation portability and audit clarity
 
-- [ ] Replace machine-specific `file:///` paths (for example, local Windows workspace paths) with repository-relative links or documented local paths.
-- [ ] Label workstation-generated audit snapshots with their execution environment and timestamp.
-- [ ] Do not present workstation disk-space readings or local test counts as properties of the GitHub Actions run.
-- [ ] Document which checks are reproducible in CI and which depend on local raw archives.
+- [x] Replace machine-specific `file:///` paths (for example, local Windows workspace paths) with repository-relative links or documented local paths.
+- [x] Label workstation-generated audit snapshots with their execution environment and timestamp.
+- [x] Do not present workstation disk-space readings or local test counts as properties of the GitHub Actions run.
+- [x] Document which checks are reproducible in CI and which depend on local raw archives.
 
 ## 5. Scope protection
 
-- [ ] Do not modify the frozen canonical baseline, taxonomy, or split assignments as part of this corrective PR.
-- [ ] Do not change the research target, encoder selection, or dataset role decisions.
-- [ ] Do not add or download raw datasets as part of this PR.
-- [ ] Keep Banking77 auxiliary-only; do not mix it into CFPB train/validation data.
-- [ ] Preserve the distinction between CFPB administrative issue labels and adjudicated semantic ground truth.
+- [x] Do not modify the frozen canonical baseline, taxonomy, or split assignments as part of this corrective PR.
+- [x] Do not change the research target, encoder selection, or dataset role decisions.
+- [x] Do not add or download raw datasets as part of this PR.
+- [x] Keep Banking77 auxiliary-only; do not mix it into CFPB train/validation data.
+- [x] Preserve the distinction between CFPB administrative issue labels and adjudicated semantic ground truth.
 
 ## Acceptance criteria
 

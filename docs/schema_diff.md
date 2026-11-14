@@ -87,7 +87,7 @@ In `CCDB_Export_2`, **52,641 narratives (11.97%)** contain internal quotation ma
 
 ## 5. Empirical Parsing Quality & Diagnostic Audit
 
-Full empirical scans were executed across all available local datasets using `src/data/parser.py`. The results are recorded in [`data/manifests/parse_errors.csv`](file:///d:/NLP/data/manifests/parse_errors.csv):
+Full empirical scans were executed across all available local datasets using `src/data/parser.py`. The results and detailed execution metadata are recorded in [`data/manifests/parse_errors.csv`](../data/manifests/parse_errors.csv) and companion manifest [`data/manifests/full_scan_provenance.csv`](../data/manifests/full_scan_provenance.csv):
 
 | Archive Scanned | Target File | Total Records | Valid Records | Parse Errors | Multiline Narratives | Quoted Narratives | Parse Error Rate |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
