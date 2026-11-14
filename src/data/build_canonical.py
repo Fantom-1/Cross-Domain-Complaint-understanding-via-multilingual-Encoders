@@ -31,6 +31,12 @@ if REPO_ROOT not in sys.path:
 from src.data.dedup import assign_duplicate_groups, compute_text_hash
 from src.data.map_intents import IntentMapper
 from src.data.normalize import normalize_complaint_text, word_count
+from src.data.parser import (
+    CFPB_FOIA_COLUMNS,
+    CSVParseError,
+    ParserDiagnostics,
+    stream_complaints,
+)
 from src.data.split import group_stratified_split, export_split_manifest
 
 RAW_ZIP_PATH = "data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip"
@@ -88,57 +94,83 @@ def build_canonical_dataset(
     too_short_count = 0
     
     t0 = time.time()
-    with zipfile.ZipFile(zip_path) as z:
-        csv_name = [n for n in z.namelist() if n.lower().endswith(".csv")][0]
-        with z.open(csv_name) as raw:
-            text_io = io.TextIOWrapper(raw, encoding="utf-8", newline="", errors="replace")
-            reader = csv.DictReader(text_io)
-            
-            for row in reader:
-                total_scanned += 1
-                if max_scan_rows and total_scanned > max_scan_rows:
-                    break
-                
-                raw_text = (row.get("Consumer complaint narrative") or "").strip()
-                if not raw_text:
-                    missing_narrative_count += 1
-                    continue
-                
-                wc = word_count(raw_text)
-                if wc < min_words:
-                    too_short_count += 1
-                    continue
-                
-                raw_prod = (row.get("Product") or "").strip()
-                canon_prod = product_map.get(raw_prod, product_fallback)
-                product_seen_counts[canon_prod] += 1
-                
-                complaint_id = (row.get("Complaint ID") or f"row_{total_scanned}").strip()
-                item = {
-                    "source_id": complaint_id,
-                    "text_original": raw_text,
-                    "product_raw": raw_prod,
-                    "domain": canon_prod,
-                    "sub_product": (row.get("Sub-product") or "").strip(),
-                    "issue": (row.get("Issue") or "").strip(),
-                    "sub_issue": (row.get("Sub-issue") or "").strip(),
-                    "date_received": (row.get("Date received") or "")[:10]
-                }
-                
-                bucket = product_reservoirs[canon_prod]
-                if len(bucket) < per_product_sample:
-                    bucket.append(item)
-                else:
-                    j = rng.randrange(product_seen_counts[canon_prod])
-                    if j < per_product_sample:
-                        bucket[j] = item
-                
-                if total_scanned % 150000 == 0:
-                    current_eligible = sum(len(b) for b in product_reservoirs.values())
-                    print(
-                        f"  Scanned {total_scanned:,} rows | Sampled eligible: {current_eligible:,} | Elapsed: {time.time()-t0:.1f}s",
-                        flush=True
-                    )
+    diag = ParserDiagnostics(archive_path=str(zip_path), file_name="")
+    stream = stream_complaints(
+        source=zip_path,
+        expected_columns=CFPB_FOIA_COLUMNS,
+        on_error="record",
+        diagnostics=diag,
+        max_rows=max_scan_rows,
+    )
+
+    for row in stream:
+        if diag.error_rows > 0:
+            first_err = diag.errors[0]
+            raise ValueError(
+                f"Source archive contains malformed rows ineligible for canonical dataset building: {diag.error_rows} error row(s) detected. "
+                f"First error at line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})."
+            )
+        total_scanned += 1
+        if max_scan_rows and total_scanned > max_scan_rows:
+            break
+        
+        raw_text = (row.get("Consumer complaint narrative") or "").strip()
+        if not raw_text:
+            missing_narrative_count += 1
+            continue
+        
+        wc = word_count(raw_text)
+        if wc < min_words:
+            too_short_count += 1
+            continue
+        
+        raw_prod = (row.get("Product") or "").strip()
+        canon_prod = product_map.get(raw_prod, product_fallback)
+        product_seen_counts[canon_prod] += 1
+        
+        complaint_id = (row.get("Complaint ID") or f"row_{total_scanned}").strip()
+        item = {
+            "source_id": complaint_id,
+            "text_original": raw_text,
+            "product_raw": raw_prod,
+            "domain": canon_prod,
+            "sub_product": (row.get("Sub-product") or "").strip(),
+            "issue": (row.get("Issue") or "").strip(),
+            "sub_issue": (row.get("Sub-issue") or "").strip(),
+            "date_received": (row.get("Date received") or "")[:10]
+        }
+        
+        bucket = product_reservoirs[canon_prod]
+        if len(bucket) < per_product_sample:
+            bucket.append(item)
+        else:
+            j = rng.randrange(product_seen_counts[canon_prod])
+            if j < per_product_sample:
+                bucket[j] = item
+        
+        if total_scanned % 150000 == 0:
+            current_eligible = sum(len(b) for b in product_reservoirs.values())
+            print(
+                f"  Scanned {total_scanned:,} rows | Sampled eligible: {current_eligible:,} | Elapsed: {time.time()-t0:.1f}s",
+                flush=True
+            )
+
+    # Schema and row integrity preflight validation:
+    # Reject immediately if any schema mismatch or row-level parse errors occurred.
+    # For this frozen baseline build, malformed rows must not be silently omitted or dropped.
+    schema_errors = [e for e in diag.errors if e.error_type == "schema_mismatch"]
+    if schema_errors:
+        err_msg = schema_errors[0].error_details
+        raise ValueError(
+            f"Source archive ineligible for canonical dataset building: 16-column CFPB FOIA archive with narratives required. ({err_msg})"
+        )
+    if diag.error_rows > 0:
+        first_err = diag.errors[0] if diag.errors else None
+        err_detail = f"line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})" if first_err else f"{diag.error_rows} error rows encountered"
+        raise ValueError(
+            f"Source archive contains malformed rows ineligible for canonical dataset building: {diag.error_rows} error row(s) detected. "
+            f"First error at {err_detail}."
+        )
 
     exclusion_counts["missing_narrative"] = missing_narrative_count
     exclusion_counts["too_short_under_20_words"] = too_short_count

@@ -2,7 +2,7 @@ name: CI Verification
 
 on:
   push:
-    branches: [ main, DATA_PREPARATION ]
+    branches: [ main, DATA_PREPARATION, phase2-1-corrective-hardening ]
   pull_request:
     branches: [ main ]
 

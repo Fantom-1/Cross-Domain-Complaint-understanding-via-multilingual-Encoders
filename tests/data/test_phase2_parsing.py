@@ -13,10 +13,17 @@ from src.data.parser import (
     BANKING77_COLUMNS,
     CSVParseError,
     ParserDiagnostics,
-    ensure_safe_field_size_limit,
-    stream_complaints,
-    scan_and_profile,
+    ProvenanceVerificationResult,
+    PROVENANCE_STATUS_CHECKSUM_VERIFIED,
+    PROVENANCE_STATUS_METADATA_ONLY,
+    PROVENANCE_STATUS_FAILED,
+    REQUIRED_PROVENANCE_FIELDS,
     SAFE_FIELD_SIZE_LIMIT,
+    compute_file_sha256,
+    ensure_safe_field_size_limit,
+    scan_and_profile,
+    stream_complaints,
+    verify_scan_provenance_record,
 )
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
@@ -232,6 +239,395 @@ class TestPhase2Parsing(unittest.TestCase):
                 details = row["error_details"]
                 self.assertIn("SHA-256:", details, "Must anchor scan evidence with SHA-256 checksum")
                 self.assertIn("Local Full-Scan Evidence", details, "Must distinguish local full scan from CI")
+
+    def test_11_malformed_rows_permissive_mode_safety(self):
+        """Asserts that permissive mode handles rows with too few and too many columns safely without IndexError."""
+        csv_text = io.StringIO(
+            "ColA,ColB,ColC\n"
+            "valA1,valB1,valC1\n"
+            "valA2,valB2\n"  # 2 columns instead of 3
+            "valA3,valB3,valC3,extra1,extra2\n"  # 5 columns instead of 3
+        )
+        diag = ParserDiagnostics(archive_path="test_perm.csv", file_name="test_perm.csv")
+        rows = list(stream_complaints(csv_text, on_error="permissive", diagnostics=diag))
+        
+        # All 3 rows yielded safely in permissive mode
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(diag.total_rows, 3)
+        self.assertEqual(diag.valid_rows, 1, "Only row 1 is fully valid")
+        self.assertEqual(diag.error_rows, 2, "Rows 2 and 3 must be counted in error_rows")
+        
+        # Row 1: normal
+        self.assertEqual(rows[0], {"ColA": "valA1", "ColB": "valB1", "ColC": "valC1"})
+        
+        # Row 2: padded with empty string so ColC is not missing
+        self.assertEqual(rows[1]["ColA"], "valA2")
+        self.assertEqual(rows[1]["ColB"], "valB2")
+        self.assertEqual(rows[1]["ColC"], "", "Missing column must be padded with empty string")
+        
+        # Row 3: overflow safely captured under _overflow_fields
+        self.assertEqual(rows[2]["ColA"], "valA3")
+        self.assertEqual(rows[2]["ColB"], "valB3")
+        self.assertEqual(rows[2]["ColC"], "valC3")
+        self.assertEqual(rows[2]["_overflow_fields"], ["extra1", "extra2"])
+        
+        # Verify null counts did not raise IndexError and tracked empty padded column
+        self.assertEqual(diag.null_counts["ColC"], 1)
+
+    def test_12_malformed_rows_strict_mode_rejection(self):
+        """Asserts that malformed rows with too few and too many columns are rejected in record and raise modes."""
+        csv_text = (
+            "ColA,ColB,ColC\n"
+            "valA1,valB1,valC1\n"
+            "valA2,valB2\n"  # 2 cols
+            "valA3,valB3,valC3,extra1\n"  # 4 cols
+            "valA4,valB4,valC4\n"  # valid
+        )
+        
+        # Record mode (default): skips malformed rows, counts them in error_rows, yields valid rows
+        diag = ParserDiagnostics(archive_path="test_strict.csv", file_name="test_strict.csv")
+        rows = list(stream_complaints(io.StringIO(csv_text), on_error="record", diagnostics=diag))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["ColA"], "valA1")
+        self.assertEqual(rows[1]["ColA"], "valA4")
+        self.assertEqual(diag.valid_rows, 2)
+        self.assertEqual(diag.error_rows, 2)
+        self.assertEqual(len(diag.errors), 2)
+        
+        # Raise mode: raises CSVParseError on first malformed row
+        with self.assertRaises(CSVParseError) as ctx:
+            list(stream_complaints(io.StringIO(csv_text), on_error="raise"))
+        self.assertIn("Column count mismatch: expected 3, got 2", str(ctx.exception))
+
+    def test_13_scan_provenance_manifest_verification(self):
+        """Asserts that full_scan_provenance.csv exists and all records pass verification."""
+        prov_path = os.path.join(REPO_ROOT, "data", "manifests", "full_scan_provenance.csv")
+        self.assertTrue(os.path.isfile(prov_path), f"Missing {prov_path}")
+        
+        with open(prov_path, "r", encoding="utf-8") as f:
+            reader = list(csv.DictReader(f))
+            self.assertEqual(len(reader), 4, "Must contain exactly 4 verified dataset scans")
+            
+            archives = {r["source_archive"] for r in reader}
+            self.assertIn("CCDB_Export_2_May_2018_through_April_2021.zip", archives)
+            self.assertIn("complaints.csv.zip", archives)
+            self.assertIn("train.csv", archives)
+            self.assertIn("test.csv", archives)
+            
+            for row in reader:
+                res = verify_scan_provenance_record(
+                    row,
+                    repo_root=REPO_ROOT,
+                    verify_local_file=True,
+                    expected_parser_version="phase2.1-v1.0"
+                )
+                self.assertNotEqual(res.status, PROVENANCE_STATUS_FAILED, f"Provenance record failed verification: {res.message}")
+                self.assertTrue(res.is_valid_metadata, f"Metadata must be valid: {res.message}")
+
+    def test_14_scan_provenance_validation_edge_cases(self):
+        """Asserts that verify_scan_provenance_record catches missing fields, checksum mismatch, and version drift."""
+        base_valid_record = {
+            "source_archive": "test_archive.zip",
+            "source_inner_file": "test.csv",
+            "source_sha256": "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+            "parser_version": "phase2.1-v1.0",
+            "command_configuration": "stream_complaints()",
+            "environment_runtime": "Python 3.12",
+            "expected_schema": "16 columns",
+            "observed_schema": "16 columns",
+            "record_count": "100",
+            "valid_count": "100",
+            "error_count": "0",
+            "scan_status": "verified_zero_errors",
+            "execution_mode": "local_workstation_full_scan",
+            "notes": "Test note",
+        }
+        
+        # Valid record with file check skipped
+        res = verify_scan_provenance_record(base_valid_record, verify_local_file=False)
+        self.assertEqual(res.status, PROVENANCE_STATUS_METADATA_ONLY)
+        self.assertTrue(res.is_valid_metadata)
+        self.assertFalse(res.is_checksum_verified)
+        
+        # Missing required field
+        bad_rec = dict(base_valid_record)
+        bad_rec["source_sha256"] = ""
+        res = verify_scan_provenance_record(bad_rec)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertFalse(res.is_valid_metadata)
+        self.assertIn("Missing or empty required field", res.message)
+        
+        # Parser version mismatch
+        res = verify_scan_provenance_record(base_valid_record, expected_parser_version="v2.0-different")
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Parser version mismatch", res.message)
+        
+        # Non-zero error count
+        bad_err = dict(base_valid_record)
+        bad_err["error_count"] = "5"
+        res = verify_scan_provenance_record(bad_err)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Non-zero error count", res.message)
+        
+        # Record count != valid count
+        bad_count = dict(base_valid_record)
+        bad_count["valid_count"] = "95"
+        res = verify_scan_provenance_record(bad_count)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Count mismatch", res.message)
+        
+        # Checksum mismatch against actual file
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(b"Hello temporary world")
+            tf_path = tf.name
+        try:
+            bad_hash_rec = dict(base_valid_record)
+            bad_hash_rec["source_archive"] = os.path.basename(tf_path)
+            bad_hash_rec["source_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
+            res = verify_scan_provenance_record(bad_hash_rec, repo_root=os.path.dirname(tf_path), verify_local_file=True)
+            self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+            self.assertFalse(res.is_checksum_verified)
+            self.assertIn("SHA-256 mismatch", res.message)
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+
+    def test_15_supported_schemas_completeness(self):
+        """Asserts that CFPB_FOIA_COLUMNS, CFPB_BULK_COLUMNS, and BANKING77_COLUMNS are correctly configured."""
+        self.assertEqual(len(CFPB_FOIA_COLUMNS), 16)
+        self.assertIn("Consumer complaint narrative", CFPB_FOIA_COLUMNS)
+        self.assertEqual(len(CFPB_BULK_COLUMNS), 15)
+        self.assertNotIn("Consumer complaint narrative", CFPB_BULK_COLUMNS)
+        self.assertEqual(len(BANKING77_COLUMNS), 2)
+        self.assertEqual(list(BANKING77_COLUMNS), ["text", "category"])
+
+    def test_16_provenance_missing_source_archive_distinction(self):
+        """Asserts that verify_scan_provenance_record returns METADATA_VALID_SOURCE_UNAVAILABLE for missing file."""
+        rec = {
+            "source_archive": "non_existent_archive_12345.zip",
+            "source_inner_file": "inner.csv",
+            "source_sha256": "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45",
+            "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+            "parser_version": "phase2.1-v1.0",
+            "command_configuration": "stream_complaints()",
+            "environment_runtime": "Python 3.12",
+            "expected_schema": "16 columns",
+            "observed_schema": "16 columns",
+            "record_count": "1000",
+            "valid_count": "1000",
+            "error_count": "0",
+            "scan_status": "verified_zero_errors",
+            "execution_mode": "local_workstation_full_scan",
+            "notes": "Test missing file",
+        }
+        res = verify_scan_provenance_record(rec, repo_root=REPO_ROOT, verify_local_file=True)
+        self.assertEqual(res.status, PROVENANCE_STATUS_METADATA_ONLY)
+        self.assertTrue(res.is_valid_metadata)
+        self.assertFalse(res.is_checksum_verified, "Missing file must not be marked checksum-verified")
+        self.assertIn("source archive unavailable locally", res.message)
+
+    def test_17_provenance_matching_local_sha256(self):
+        """Asserts that verify_scan_provenance_record returns CHECKSUM_VERIFIED when file hash matches exactly."""
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(b"Unique sample dataset content for hash testing")
+            tf_path = tf.name
+        try:
+            expected_sha = compute_file_sha256(tf_path)
+            rec = {
+                "source_archive": os.path.basename(tf_path),
+                "source_inner_file": "sample.csv",
+                "source_sha256": expected_sha,
+                "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+                "parser_version": "phase2.1-v1.0",
+                "command_configuration": "stream_complaints()",
+                "environment_runtime": "Python 3.12",
+                "expected_schema": "16 columns",
+                "observed_schema": "16 columns",
+                "record_count": "50",
+                "valid_count": "50",
+                "error_count": "0",
+                "scan_status": "verified_zero_errors",
+                "execution_mode": "local_workstation_full_scan",
+                "notes": "Exact hash match test",
+            }
+            res = verify_scan_provenance_record(rec, repo_root=os.path.dirname(tf_path), verify_local_file=True)
+            self.assertEqual(res.status, PROVENANCE_STATUS_CHECKSUM_VERIFIED)
+            self.assertTrue(res.is_valid_metadata)
+            self.assertTrue(res.is_checksum_verified, "Matching file must be marked checksum-verified")
+            self.assertIn("Checksum verified", res.message)
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+
+    def test_18_audit_report_ci_mode_unverified_checksum_reflection(self):
+        """Asserts that audit report renders NOT RUN / NOT VERIFIED (CI) for archive checksums when files are uncached."""
+        if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
+            return
+            
+        from scripts.audit_phase2 import run_phase2_audit
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_report_path = os.path.join(tmp_dir, "test_ci_audit_report.md")
+            
+            # Run audit in CI mode
+            old_ci = os.environ.get("GITHUB_ACTIONS")
+            os.environ["GITHUB_ACTIONS"] = "true"
+            try:
+                # Temporarily point RAW_EXPORT_2 check by running audit
+                success = run_phase2_audit(report_path=test_report_path)
+                self.assertTrue(os.path.isfile(test_report_path))
+                with open(test_report_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                # Check that Pillar 3 is Scan Metadata and Pillar 4 is Checksum Verification
+                self.assertIn("**3. Scan Metadata Manifests**", content)
+                self.assertIn("**4. Archive Checksum Verification**", content)
+            finally:
+                if old_ci is None:
+                    os.environ.pop("GITHUB_ACTIONS", None)
+                else:
+                    os.environ["GITHUB_ACTIONS"] = old_ci
+
+    def test_19_audit_fails_on_stale_parser_version(self):
+        """Asserts that verify_scan_provenance_record rejects records with stale parser version."""
+        rec = {
+            "source_archive": "test_archive.zip",
+            "source_inner_file": "test_inner.csv",
+            "source_sha256": "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45",
+            "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+            "parser_version": "stale-v0.1",
+            "command_configuration": "stream_complaints()",
+            "environment_runtime": "Python 3.12",
+            "expected_schema": "16 columns",
+            "observed_schema": "16 columns",
+            "record_count": "100",
+            "valid_count": "100",
+            "error_count": "0",
+            "scan_status": "verified_zero_errors",
+            "execution_mode": "local_workstation_full_scan",
+            "notes": "Stale version test",
+        }
+        res = verify_scan_provenance_record(rec, expected_parser_version="phase2.1-v1.0")
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertFalse(res.is_valid_metadata)
+        self.assertIn("Parser version mismatch", res.message)
+
+    def test_20_manifest_cardinality_and_reconciliation_failure(self):
+        """Asserts that audit fails when manifest has invalid cardinality, checksum/count mismatch, or duplicate keys."""
+        if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
+            return
+        from scripts.audit_phase2 import run_phase2_audit, FULL_SCAN_PROVENANCE_CSV
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_prov = os.path.join(tmp_dir, "temp_prov.csv")
+            shutil.copyfile(FULL_SCAN_PROVENANCE_CSV, temp_prov)
+            
+            with open(temp_prov, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames
+                original_rows = list(reader)
+
+            def write_mutated(rows):
+                with open(FULL_SCAN_PROVENANCE_CSV, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+            
+            try:
+                # 1. Truncate full_scan_provenance.csv to header only (cardinality 0 != 4)
+                write_mutated([])
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_cardinality.md"))
+                self.assertFalse(passed, "Audit must fail when full_scan_provenance.csv has invalid cardinality (< 4)")
+
+                # 2. Mutate SHA-256 checksum in first record
+                mutated_checksum = [dict(r) for r in original_rows]
+                mutated_checksum[0]["source_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
+                write_mutated(mutated_checksum)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_checksum.md"))
+                self.assertFalse(passed, "Audit must fail when provenance checksum does not reconcile with sentinel")
+
+                # 3. Mutate record count in first record
+                mutated_count = [dict(r) for r in original_rows]
+                mutated_count[0]["record_count"] = "99999999"
+                write_mutated(mutated_count)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_count.md"))
+                self.assertFalse(passed, "Audit must fail when provenance record count does not reconcile with sentinel")
+
+                # 4. Duplicate inner file key
+                duplicate_key_rows = [dict(r) for r in original_rows]
+                duplicate_key_rows.append(dict(duplicate_key_rows[0]))
+                write_mutated(duplicate_key_rows)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_duplicate.md"))
+                self.assertFalse(passed, "Audit must fail when duplicate inner file keys exist in manifest")
+            finally:
+                shutil.copyfile(temp_prov, FULL_SCAN_PROVENANCE_CSV)
+
+    def test_21_canonical_builder_rejects_ineligible_15_column_bulk_feed(self):
+        """Asserts that build_canonical_dataset raises ValueError when passed a 15-column feed without narratives."""
+        from src.data.build_canonical import build_canonical_dataset
+        import zipfile
+        
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_bulk_mock.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Company public response,"
+                    "Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2026-01-01,Credit card,General,Billing,,Acme Bank,CA,90210,,Web,2026-01-02,Closed,Yes,9999\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+                
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("Source archive ineligible for canonical dataset building", str(ctx.exception))
+
+    def test_22_canonical_builder_rejects_malformed_rows_after_valid_rows(self):
+        """Asserts that build_canonical_dataset fails when malformed short/overflow rows follow valid rows."""
+        from src.data.build_canonical import build_canonical_dataset
+        import zipfile
+
+        # Subcase A: Malformed short row (3 columns) following a valid row
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_short_row.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,"
+                    "Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2019-01-01,Credit card,General,Billing,Late fee,"
+                    "This is a valid complaint narrative with more than twenty words to satisfy the minimum length filter required by preflight.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1001\n"
+                    "2019-01-02,Credit card,Truncated line with only three columns\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("malformed rows ineligible for canonical dataset building", str(ctx.exception))
+
+        # Subcase B: Malformed overflow row (18 columns) following a valid row
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_overflow_row.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,"
+                    "Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2019-01-01,Credit card,General,Billing,Late fee,"
+                    "This is a valid complaint narrative with more than twenty words to satisfy the minimum length filter required by preflight.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1001\n"
+                    "2019-01-02,Credit card,General,Billing,Late fee,"
+                    "Narrative text here that is long enough to pass length filter requirements.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1002,extra1,extra2\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("malformed rows ineligible for canonical dataset building", str(ctx.exception))
+
+
 
 
 

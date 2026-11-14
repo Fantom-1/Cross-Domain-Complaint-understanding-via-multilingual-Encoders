@@ -12,7 +12,7 @@
 
 This document establishes the verified legal provenance, archival terms of use, release architecture, and record-ID overlap analysis for all raw data sources evaluated under Phase 1 of the Cross-Domain Complaint Understanding pipeline.
 
-In accordance with [`DATA_PREPARATION_SPEC.md`](file:///d:/NLP/DATA_PREPARATION_SPEC.md) and [`SYSTEM.md`](file:///d:/NLP/SYSTEM.md), and in direct response to code review:
+In accordance with [`DATA_PREPARATION_SPEC.md`](../DATA_PREPARATION_SPEC.md) and [`SYSTEM.md`](../SYSTEM.md), and in direct response to code review:
 1. **Strict Separation of Observed Evidence vs. Reported Assumptions:** Direct empirical observations from locally inspected files (`CCDB_Export_2`, `complaints.csv.zip`, `banking77`) are strictly distinguished from reported, unverified properties of unfetched remote archives.
 2. **Temporal Window Contiguity vs. Empirical ID Overlap:** The 21 CFPB FOIA export windows are proven to be temporally contiguous and chronologically non-overlapping based on calendar dates. However, empirical record-ID overlap against baseline snapshot `CCDB_Export_2` is explicitly classified as `unmeasured_unfetched` for all uninspected archives.
 3. **Legal Nuance: Bureau Metadata vs. Consumer Narratives:** 17 U.S.C. § 105 applies strictly to bureau-authored metadata. Consumer complaint narratives are third-party consumer submissions published pursuant to affirmative opt-in consent (80 FR 15572) and FOIA reading room rules; downstream commercial reuse terms are formally marked `needs_verification`.
@@ -145,7 +145,7 @@ In response to review feedback, we explicitly distinguish temporal non-overlap f
 
 ### 6.1 Artifact Metadata
 * **Filename:** `CCDB_Export_2_May_2018_through_April_2021.zip`
-* **Local Location:** [`data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip`](file:///d:/NLP/data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip)
+* **Local Location:** [`data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip`](../data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip)
 * **File Size:** 164,598,156 bytes compressed (782,853,241 bytes uncompressed CSV)
 * **Verified SHA-256 Checksum:** `4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45`
 * **Total Scanned Complaints:** 1,041,632
@@ -153,7 +153,7 @@ In response to review feedback, we explicitly distinguish temporal non-overlap f
 * **Empirical Date Range:** Min `2018-05-01`, Max `2021-04-30`
 
 ### 6.2 Derived Canonical Dataset
-* **File Path:** [`data/processed/canonical_dataset.parquet`](file:///d:/NLP/data/processed/canonical_dataset.parquet)
+* **File Path:** [`data/processed/canonical_dataset.parquet`](../data/processed/canonical_dataset.parquet)
 * **Row Count:** 45,723 instances (exactly reconciled with split manifest and split CSVs)
 * **Label Space:** 16 administrative classes defined in `configs/taxonomy.json`
 * **Product Domains:** 9 financial domains
@@ -168,7 +168,7 @@ To provide an anchor for academic benchmarking and controlled temporal/domain sh
 ## 7. Auxiliary & Diagnostic Data Sources Review
 
 ### 7.1 BANKING77 (PolyAI)
-* **Files:** [`data/raw/banking77/train.csv`](file:///d:/NLP/data/raw/banking77/train.csv), [`data/raw/banking77/test.csv`](file:///d:/NLP/data/raw/banking77/test.csv), [`data/raw/banking77/categories.json`](file:///d:/NLP/data/raw/banking77/categories.json)
+* **Files:** [`data/raw/banking77/train.csv`](../data/raw/banking77/train.csv), [`data/raw/banking77/test.csv`](../data/raw/banking77/test.csv), [`data/raw/banking77/categories.json`](../data/raw/banking77/categories.json)
 * **License:** Creative Commons Attribution 4.0 International (CC BY 4.0)
 * **Actual Row Counts (RFC 4180):** 10,003 train, 3,080 test, 77 fine-grained classes.
 * **Semantic Role:** `auxiliary_only`.
