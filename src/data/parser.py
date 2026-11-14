@@ -11,6 +11,7 @@ Designed specifically to address real-world edge cases in large consumer complai
 
 import csv
 import dataclasses
+import hashlib
 import io
 import os
 import sys
@@ -281,7 +282,8 @@ def stream_complaints(
                 diagnostics.total_rows += 1
             
             # Detect malformed column counts
-            if len(row) != col_count:
+            is_malformed = (len(row) != col_count)
+            if is_malformed:
                 error_msg = f"Column count mismatch: expected {col_count}, got {len(row)}"
                 cid = row[complaint_id_idx] if (0 <= complaint_id_idx < len(row)) else "UNKNOWN"
                 snippet = " | ".join(row[:3])[:200]
@@ -302,11 +304,33 @@ def stream_complaints(
                     raise CSVParseError(f"Line {line_num}: {error_msg} (Snippet: {snippet})")
                 elif on_error in ("record", "skip"):
                     continue
+                elif on_error == "permissive":
+                    # In permissive mode: malformed rows are counted as error_rows (NOT valid_rows),
+                    # but yielded safely with preserved column mappings without IndexErrors.
+                    if len(row) < col_count:
+                        padded_row = list(row) + [""] * (col_count - len(row))
+                        row_dict = dict(zip(header, padded_row))
+                    else:
+                        row_dict = dict(zip(header, row[:col_count]))
+                        row_dict["_overflow_fields"] = row[col_count:]
+                    
+                    if diagnostics is not None:
+                        for c_i in range(col_count):
+                            val = row[c_i] if c_i < len(row) else ""
+                            if not val.strip():
+                                diagnostics.null_counts[header[c_i]] += 1
+                    
+                    yield row_dict
+                    yielded_count += 1
+                    if max_rows and yielded_count >= max_rows:
+                        break
+                    continue
             
-            # Track multiline narratives, quotes, and null counts
+            # Well-formed valid row
             if diagnostics is not None:
                 diagnostics.valid_rows += 1
-                for c_i, val in enumerate(row):
+                for c_i in range(col_count):
+                    val = row[c_i]
                     if not val.strip():
                         diagnostics.null_counts[header[c_i]] += 1
                 
@@ -355,3 +379,123 @@ def scan_and_profile(
     for _ in gen:
         pass
     return diag
+
+
+# ---------------------------------------------------------------------------
+# Full-Scan Provenance and Verification
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class ScanProvenanceRecord:
+    """Structured record of an auditable full-dataset scan."""
+    source_archive: str
+    source_inner_file: str
+    source_sha256: str
+    scan_timestamp_utc: str
+    parser_version: str
+    command_configuration: str
+    environment_runtime: str
+    expected_schema: str
+    observed_schema: str
+    record_count: int
+    valid_count: int
+    error_count: int
+    scan_status: str
+    execution_mode: str
+    notes: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+def compute_file_sha256(filepath: Union[str, Path]) -> str:
+    """Computes SHA-256 hash in streaming 64 KB chunks."""
+    h = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+REQUIRED_PROVENANCE_FIELDS = [
+    "source_archive",
+    "source_inner_file",
+    "source_sha256",
+    "scan_timestamp_utc",
+    "parser_version",
+    "command_configuration",
+    "environment_runtime",
+    "expected_schema",
+    "observed_schema",
+    "record_count",
+    "valid_count",
+    "error_count",
+    "scan_status",
+    "execution_mode",
+]
+
+
+def verify_scan_provenance_record(
+    record: Dict[str, Any],
+    repo_root: Optional[Union[str, Path]] = None,
+    verify_local_file: bool = True,
+    expected_parser_version: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Verifies a single scan provenance record against schema and local artifacts.
+    
+    Returns:
+        (is_valid: bool, status_message: str)
+    """
+    # 1. Check all required fields are present and non-empty
+    for field in REQUIRED_PROVENANCE_FIELDS:
+        val = record.get(field)
+        if val is None or str(val).strip() == "":
+            return False, f"Missing or empty required field: {field}"
+    
+    # 2. Check parser version
+    rec_version = str(record.get("parser_version", "")).strip()
+    if expected_parser_version is not None and rec_version != expected_parser_version:
+        return False, f"Parser version mismatch: expected {expected_parser_version}, got {rec_version}"
+    
+    # 3. Check error count and status
+    try:
+        err_count = int(record.get("error_count", -1))
+        rec_count = int(record.get("record_count", 0))
+        valid_count = int(record.get("valid_count", 0))
+    except (ValueError, TypeError) as e:
+        return False, f"Invalid numeric count in record: {e}"
+        
+    if err_count != 0:
+        return False, f"Non-zero error count in verified scan: {err_count}"
+        
+    if record.get("scan_status") != "verified_zero_errors":
+        return False, f"Unexpected scan status: {record.get('scan_status')}"
+        
+    if rec_count <= 0 or valid_count != rec_count:
+        return False, f"Count mismatch: record_count={rec_count}, valid_count={valid_count}"
+
+    # 4. Local file integrity check (if repo_root is provided and verify_local_file is True)
+    if verify_local_file and repo_root is not None:
+        source_archive = str(record.get("source_archive", ""))
+        possible_paths = [
+            os.path.join(repo_root, source_archive),
+            os.path.join(repo_root, "data", "raw", "cfpb", source_archive),
+            os.path.join(repo_root, "data", "raw", "banking77", source_archive),
+            os.path.join(repo_root, "data", "raw", source_archive),
+        ]
+        resolved_path = None
+        for p in possible_paths:
+            if os.path.isfile(p):
+                resolved_path = p
+                break
+                
+        if resolved_path is not None:
+            actual_sha = compute_file_sha256(resolved_path)
+            expected_sha = str(record.get("source_sha256", "")).lower()
+            if actual_sha.lower() != expected_sha:
+                return False, f"SHA-256 mismatch for {source_archive}: expected {expected_sha}, got {actual_sha}"
+        else:
+            return True, f"Verified metadata; source file uncached on disk ({source_archive})"
+
+    return True, f"Verified scan record: {record.get('source_archive')} ({rec_count:,} records, 0 errors)"
+
