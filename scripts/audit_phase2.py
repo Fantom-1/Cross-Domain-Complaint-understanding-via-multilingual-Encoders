@@ -25,6 +25,7 @@ Gating Invariants:
 import csv
 import datetime
 import os
+import re
 import shutil
 import sys
 import unittest
@@ -53,6 +54,9 @@ REQUIRED_PARSE_ERROR_COLUMNS = [
     "error_details",
     "raw_snippet",
 ]
+
+EXPECTED_PARSER_VERSION = "phase2.1-v1.0"
+EXPECTED_SCAN_CARDINALITY = 4
 
 RAW_EXPORT_2 = os.path.join(REPO_ROOT, "data", "raw", "cfpb", "CCDB_Export_2_May_2018_through_April_2021.zip")
 RAW_BANKING77 = os.path.join(REPO_ROOT, "data", "raw", "banking77", "train.csv")
@@ -202,10 +206,10 @@ def _run_phase2_audit_internal(
                     log(f"Schema mismatch in parse_errors.csv: expected {REQUIRED_PARSE_ERROR_COLUMNS}, got {headers}", "FAIL", pillar=3)
                 
                 rows = list(reader)
-                if len(rows) >= 4:
-                    log(f"Cataloged {len(rows)} verification records across scanned datasets", "PASS", pillar=3)
+                if len(rows) == EXPECTED_SCAN_CARDINALITY:
+                    log(f"Exact scan cardinality ({EXPECTED_SCAN_CARDINALITY}) cataloged in parse_errors.csv", "PASS", pillar=3)
                 else:
-                    log(f"Expected at least 4 verification rows, found {len(rows)}", "FAIL", pillar=3)
+                    log(f"Expected exactly {EXPECTED_SCAN_CARDINALITY} verification rows in parse_errors.csv, found {len(rows)}", "FAIL", pillar=3)
                     
                 for r in rows:
                     if r.get("error_type") != "verified_zero_errors":
@@ -221,23 +225,85 @@ def _run_phase2_audit_internal(
                     log(f"full_scan_provenance.csv missing fields: {set(REQUIRED_PROVENANCE_FIELDS) - set(prov_headers)}", "FAIL", pillar=3)
                 
                 prov_rows = list(prov_reader)
+                if len(prov_rows) == EXPECTED_SCAN_CARDINALITY:
+                    log(f"Exact scan cardinality ({EXPECTED_SCAN_CARDINALITY}) validated in full_scan_provenance.csv", "PASS", pillar=3)
+                else:
+                    log(f"Expected exactly {EXPECTED_SCAN_CARDINALITY} provenance records in full_scan_provenance.csv, found {len(prov_rows)}", "FAIL", pillar=3)
+
+            # 3. Row-for-row reconciliation between parse_errors.csv sentinels and full_scan_provenance.csv
+            prov_by_file = {pr.get("source_inner_file"): pr for pr in prov_rows}
+            reconciliation_failed = False
+            for r in rows:
+                inner_f = r.get("file_name", "")
+                if inner_f not in prov_by_file:
+                    log(f"Reconciliation error: sentinel file '{inner_f}' not found in full_scan_provenance.csv", "FAIL", pillar=3)
+                    reconciliation_failed = True
+                    continue
+
+                prov_rec = prov_by_file[inner_f]
+                # Reconcile archive name
+                expected_archive = r.get("archive_name", "")
+                actual_archive = prov_rec.get("source_archive", "")
+                if actual_archive != expected_archive and not (expected_archive == "banking77" and actual_archive == inner_f):
+                    log(f"Reconciliation error for {inner_f}: archive mismatch (sentinel={expected_archive}, prov={actual_archive})", "FAIL", pillar=3)
+                    reconciliation_failed = True
+
+                # Reconcile SHA-256
+                details = r.get("error_details", "")
+                sha_match = re.search(r"SHA-256:\s*([a-fA-F0-9]{64})", details)
+                if not sha_match:
+                    log(f"Reconciliation error for {inner_f}: SHA-256 missing in sentinel details", "FAIL", pillar=3)
+                    reconciliation_failed = True
+                else:
+                    sentinel_sha = sha_match.group(1).lower()
+                    prov_sha = str(prov_rec.get("source_sha256", "")).lower()
+                    if sentinel_sha != prov_sha:
+                        log(f"Reconciliation error for {inner_f}: SHA-256 mismatch (sentinel={sentinel_sha}, prov={prov_sha})", "FAIL", pillar=3)
+                        reconciliation_failed = True
+
+                # Reconcile record count
+                count_match = re.search(r"([\d,]+)\s+records", details)
+                if not count_match:
+                    log(f"Reconciliation error for {inner_f}: record count missing in sentinel details", "FAIL", pillar=3)
+                    reconciliation_failed = True
+                else:
+                    sentinel_count = int(count_match.group(1).replace(",", ""))
+                    try:
+                        prov_count = int(prov_rec.get("record_count", 0))
+                    except ValueError:
+                        prov_count = -1
+                    if sentinel_count != prov_count:
+                        log(f"Reconciliation error for {inner_f}: count mismatch (sentinel={sentinel_count}, prov={prov_count})", "FAIL", pillar=3)
+                        reconciliation_failed = True
+
+            if not reconciliation_failed and len(rows) == EXPECTED_SCAN_CARDINALITY and len(prov_rows) == EXPECTED_SCAN_CARDINALITY:
+                log(f"Row-for-row reconciliation passed across all {EXPECTED_SCAN_CARDINALITY} sentinel and provenance records", "PASS", pillar=3)
 
             provenance_results = []
             for pr in prov_rows:
-                res = verify_scan_provenance_record(pr, repo_root=REPO_ROOT, verify_local_file=True)
+                res = verify_scan_provenance_record(
+                    pr,
+                    repo_root=REPO_ROOT,
+                    verify_local_file=True,
+                    expected_parser_version=EXPECTED_PARSER_VERSION,
+                )
                 provenance_results.append(res)
 
             failed_results = [r for r in provenance_results if r.status == PROVENANCE_STATUS_FAILED]
             checksum_verified = [r for r in provenance_results if r.status == PROVENANCE_STATUS_CHECKSUM_VERIFIED]
             metadata_only = [r for r in provenance_results if r.status == PROVENANCE_STATUS_METADATA_ONLY]
 
-            if failed_results:
+            if reconciliation_failed or len(rows) != EXPECTED_SCAN_CARDINALITY or len(prov_rows) != EXPECTED_SCAN_CARDINALITY:
+                pillar_results[3]["result"] = "FAIL"
+                pillar_results[3]["notes"] = f"Manifest reconciliation or cardinality mismatch (expected {EXPECTED_SCAN_CARDINALITY})"
+            elif failed_results:
                 for fr in failed_results:
                     log(f"Provenance verification failed for {fr.source_archive}: {fr.message}", "FAIL", pillar=3)
+                pillar_results[3]["result"] = "FAIL"
                 pillar_results[3]["notes"] = f"Provenance metadata failure: {failed_results[0].message}"
             else:
-                log(f"Validated structured metadata across all {len(prov_rows)} dataset records", "PASS", pillar=3)
-                pillar_results[3]["notes"] = f"{len(prov_rows)} scan records schema-valid; version phase2.1-v1.0 verified"
+                log(f"Validated structured metadata across all {len(prov_rows)} dataset records with version {EXPECTED_PARSER_VERSION}", "PASS", pillar=3)
+                pillar_results[3]["notes"] = f"{len(prov_rows)} scan records schema-valid; version {EXPECTED_PARSER_VERSION} verified"
 
         except Exception as e:
             log(f"Failed parsing manifests: {e}", "FAIL", pillar=3)

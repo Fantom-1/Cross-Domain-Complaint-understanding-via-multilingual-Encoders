@@ -488,6 +488,71 @@ class TestPhase2Parsing(unittest.TestCase):
                 else:
                     os.environ["GITHUB_ACTIONS"] = old_ci
 
+    def test_19_audit_fails_on_stale_parser_version(self):
+        """Asserts that verify_scan_provenance_record rejects records with stale parser version."""
+        rec = {
+            "source_archive": "test_archive.zip",
+            "source_inner_file": "test_inner.csv",
+            "source_sha256": "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45",
+            "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+            "parser_version": "stale-v0.1",
+            "command_configuration": "stream_complaints()",
+            "environment_runtime": "Python 3.12",
+            "expected_schema": "16 columns",
+            "observed_schema": "16 columns",
+            "record_count": "100",
+            "valid_count": "100",
+            "error_count": "0",
+            "scan_status": "verified_zero_errors",
+            "execution_mode": "local_workstation_full_scan",
+            "notes": "Stale version test",
+        }
+        res = verify_scan_provenance_record(rec, expected_parser_version="phase2.1-v1.0")
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertFalse(res.is_valid_metadata)
+        self.assertIn("Parser version mismatch", res.message)
+
+    def test_20_manifest_cardinality_and_reconciliation_failure(self):
+        """Asserts that audit fails when manifest has incomplete cardinality or mismatched checksums."""
+        if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
+            return
+        from scripts.audit_phase2 import run_phase2_audit, FULL_SCAN_PROVENANCE_CSV
+        import shutil
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_report = os.path.join(tmp_dir, "report.md")
+            temp_prov = os.path.join(tmp_dir, "temp_prov.csv")
+            shutil.copyfile(FULL_SCAN_PROVENANCE_CSV, temp_prov)
+            
+            try:
+                # Truncate full_scan_provenance.csv to header only (cardinality 0 != 4)
+                with open(FULL_SCAN_PROVENANCE_CSV, "w", encoding="utf-8") as f:
+                    f.write("source_archive,source_inner_file,source_sha256,scan_timestamp_utc,parser_version,command_configuration,environment_runtime,expected_schema,observed_schema,record_count,valid_count,error_count,scan_status,execution_mode,notes\n")
+                    
+                passed = run_phase2_audit(report_path=test_report)
+                self.assertFalse(passed, "Audit must fail when full_scan_provenance.csv has invalid cardinality (< 4)")
+            finally:
+                shutil.copyfile(temp_prov, FULL_SCAN_PROVENANCE_CSV)
+
+    def test_21_canonical_builder_rejects_ineligible_15_column_bulk_feed(self):
+        """Asserts that build_canonical_dataset raises ValueError when passed a 15-column feed without narratives."""
+        from src.data.build_canonical import build_canonical_dataset
+        import zipfile
+        
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_bulk_mock.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Company public response,"
+                    "Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2026-01-01,Credit card,General,Billing,,Acme Bank,CA,90210,,Web,2026-01-02,Closed,Yes,9999\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+                
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("Source archive ineligible for canonical dataset building", str(ctx.exception))
+
 
 
 

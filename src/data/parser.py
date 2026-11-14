@@ -84,7 +84,7 @@ BANKING77_COLUMNS: Tuple[str, ...] = (
 )
 
 
-class CSVParseError(Exception):
+class CSVParseError(ValueError):
     """Raised when strict parsing fails on malformed CSV data."""
     pass
 

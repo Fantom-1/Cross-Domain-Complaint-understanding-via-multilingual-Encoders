@@ -1,6 +1,6 @@
 # Phase 2 Audit Report: Robust Parsing & Schema Diff
 
-- **Audit Execution Date:** 2026-11-14T18:32:48.432168+00:00
+- **Audit Execution Date:** 2026-11-14T18:48:48.000911+00:00
 - **Execution Environment:** Developer Workstation (win32)
 - **Workspace Root:** `D:\NLP`
 - **Overall Verdict:** **PASSED**
@@ -15,7 +15,7 @@
 | **4. Archive Checksum Verification** | Raw archive SHA-256 match | PASS | 4 / 4 raw archives checksum-verified locally |
 | **5. Documentation Completeness** | Field semantics & schema diff | PASS | Epistemological boundaries, 80 FR 15572, and 2026 deprecation documented |
 | **6. Empirical Ingestion Smoke** | Real archive streaming | PASS | Local archives parse cleanly without memory bloat or delimiter crashes |
-| **7. Unit Test Suite Execution** | Full regression coverage | PASS | 37 tests executed (Phase 2, Phase 1, Phase 0) with 0 failures |
+| **7. Unit Test Suite Execution** | Full regression coverage | PASS | 40 tests executed (Phase 2, Phase 1, Phase 0) with 0 failures |
 
 ## Detailed Execution Log
 
@@ -33,9 +33,11 @@
 [INFO ] --- Pillar 3: Scan Metadata Manifests & Parse Errors ---
 [PASS ] data/manifests/parse_errors.csv and full_scan_provenance.csv exist
 [PASS ] Exact 7-column schema validated in parse_errors.csv: ['archive_name', 'file_name', 'line_number', 'complaint_id', 'error_type', 'error_details', 'raw_snippet']
-[PASS ] Cataloged 4 verification records across scanned datasets
+[PASS ] Exact scan cardinality (4) cataloged in parse_errors.csv
 [PASS ] full_scan_provenance.csv contains all required structured provenance fields
-[PASS ] Validated structured metadata across all 4 dataset records
+[PASS ] Exact scan cardinality (4) validated in full_scan_provenance.csv
+[PASS ] Row-for-row reconciliation passed across all 4 sentinel and provenance records
+[PASS ] Validated structured metadata across all 4 dataset records with version phase2.1-v1.0
 [INFO ] --- Pillar 4: Raw Archive Checksum Verification ---
 [PASS ] All 4 raw archives checksum-verified locally against source_sha256
 [INFO ] --- Pillar 5: Documentation Completeness & Semantic Governance ---
@@ -48,6 +50,6 @@
 [INFO ] --- Pillar 6: Empirical Ingestion Smoke Checks ---
 [PASS ] Empirical smoke test: successfully streamed 100 rows from local CCDB_Export_2
 [INFO ] --- Pillar 7: Unit Test Suite Execution ---
-[PASS ] Test suites PASSED (37 tests executed: Phase 2, Phase 1, Phase 0)
+[PASS ] Test suites PASSED (40 tests executed: Phase 2, Phase 1, Phase 0)
 [INFO ] OVERALL AUDIT VERDICT: **PASSED**
 ```
