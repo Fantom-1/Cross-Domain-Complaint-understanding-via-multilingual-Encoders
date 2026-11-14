@@ -1,6 +1,6 @@
 # Phase 3 Audit Report: Full-Corpus Profiling
 
-- **Audit Execution Date:** 2026-11-14T18:08:52.103209+00:00
+- **Audit Execution Date:** 2026-11-14T19:10:13.702773+00:00
 - **Workspace:** `D:\NLP`
 - **Overall Verdict:** **PASSED**
 
@@ -13,7 +13,7 @@
 | **3. Profile Manifests** | JSON & CSV profile schema integrity | PASS | 1,041,632 rows reconciled, 0 duplicate IDs, 9-column CSV validated |
 | **4. Documentation** | Comprehensive empirical report | PASS | Full population, length percentiles, duplicate templates, and drift documented |
 | **5. Empirical Smoke** | Synthetic / stream profiling test | PASS | Stream profiler executes cleanly with 0 errors on mock data |
-| **6. Unit Test Suites** | Regression coverage across Phases 0-3 | PASS | 39 tests executed (Phase 3 (10), Phase 2 (10), Phase 1 (9), Phase 0 (10)) with 0 failures |
+| **6. Unit Test Suites** | Regression coverage across Phases 0-3 | PASS | 51 tests executed (Phase 3 (10), Phase 2 (10), Phase 1 (9), Phase 0 (10)) with 0 failures |
 
 ## Detailed Execution Log
 
@@ -38,6 +38,6 @@
 [INFO ] --- Pillar 5: Empirical Ingestion Smoke Checks ---
 [PASS ] Empirical profiler smoke test: successfully profiled in-memory sample stream
 [INFO ] --- Pillar 6: Unit Test Suite Execution ---
-[PASS ] Test suites PASSED (39 tests executed: Phase 3 (10), Phase 2 (10), Phase 1 (9), Phase 0 (10))
+[PASS ] Test suites PASSED (51 tests executed: Phase 3 (10), Phase 2 (10), Phase 1 (9), Phase 0 (10))
 [INFO ] OVERALL AUDIT VERDICT: **PASSED**
 ```
