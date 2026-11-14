@@ -6,7 +6,7 @@ Adheres strictly to the specification in Dataset Preparation Handover:
 - Narrative availability and missingness by source fields.
 - Product, sub-product, Issue, Sub-issue and label-combination frequencies.
 - Label coverage by product/domain and time window.
-- Character and token length distributions, including percentiles and tails.
+- Character and whitespace-word length distributions, including percentiles and tails.
 - Encoding/whitespace anomalies, repeated IDs, exact duplicates and near duplicates.
 - Taxonomy drift and visible discontinuities around source/form changes.
 - Natural class distribution and plausible train/validation/test support.
@@ -37,6 +37,8 @@ from src.data.parser import (
     CFPB_BULK_COLUMNS,
     CFPB_FOIA_COLUMNS,
     BANKING77_COLUMNS,
+    CSVParseError,
+    ParserDiagnostics,
     stream_complaints,
 )
 
@@ -179,9 +181,15 @@ class CorpusProfiler:
         if isinstance(archive_path, io.IOBase):
             archive_source = archive_path
             archive_name = getattr(archive_path, "name", "<stream>")
+            archive_path_val = archive_name
         else:
             archive_source = str(archive_path)
             archive_name = os.path.basename(archive_source)
+            try:
+                rel = os.path.relpath(archive_source, REPO_ROOT).replace("\\", "/")
+                archive_path_val = rel if not rel.startswith("..") else archive_name
+            except ValueError:
+                archive_path_val = archive_name
         
         total_rows = 0
         narrative_rows = 0
@@ -240,12 +248,26 @@ class CorpusProfiler:
         # Temporal drift: product per year
         product_by_year: Dict[str, Counter[str]] = collections.defaultdict(collections.Counter)
         
-        for row in stream_complaints(archive_source):
+        diag = ParserDiagnostics(archive_path=str(archive_source), file_name=archive_name)
+        stream = stream_complaints(
+            source=archive_source,
+            expected_columns=CFPB_FOIA_COLUMNS,
+            on_error="record",
+            diagnostics=diag,
+            max_rows=max_rows,
+        )
+
+        for row in stream:
+            if diag.error_rows > 0:
+                first_err = diag.errors[0]
+                raise ValueError(
+                    f"Archive contains malformed rows ineligible for profiling: {diag.error_rows} error row(s) detected. "
+                    f"First error at line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})."
+                )
+            
             total_rows += 1
             if total_rows % 250000 == 0:
                 print(f"[PROFILER] Processed {total_rows:,} rows ({narrative_rows:,} narratives found)...", flush=True)
-            if max_rows and total_rows > max_rows:
-                break
             
             # Check complaint ID uniqueness
             c_id = row.get("Complaint ID", "").strip()
@@ -362,16 +384,33 @@ class CorpusProfiler:
                 natural_class_counts[intent_label] += 1
             else:
                 missing_narrative_rows += 1
-        
+
+            if max_rows and total_rows >= max_rows:
+                break
+
+        # Check for parser errors or schema mismatch recorded during streaming
+        schema_errors = [e for e in diag.errors if e.error_type == "schema_mismatch"]
+        if schema_errors:
+            raise ValueError(
+                f"Source archive ineligible for CFPB FOIA profiling: 16-column CFPB FOIA archive with narratives required. "
+                f"({schema_errors[0].error_details})"
+            )
+        if diag.error_rows > 0:
+            first_err = diag.errors[0]
+            raise ValueError(
+                f"Source archive contains malformed rows ineligible for profiling: {diag.error_rows} error row(s) detected. "
+                f"First error at line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})."
+            )
+
         # Aggregate statistics
         char_stats = _compute_summary_stats(char_lengths)
         word_stats = _compute_summary_stats(word_lengths)
-        
+
         # Duplicate metrics
         unique_hashes = len(exact_text_hash_counts)
         exact_duplicate_narratives = sum(cnt - 1 for cnt in exact_text_hash_counts.values() if cnt > 1)
         top_duplicate_hashes = exact_text_hash_counts.most_common(10)
-        
+
         # Missingness percentages
         field_null_rates = {
             col: {
@@ -381,10 +420,10 @@ class CorpusProfiler:
             }
             for col in CFPB_FOIA_COLUMNS
         }
-        
+
         return {
             "archive_name": archive_name,
-            "archive_path": archive_path,
+            "archive_path": archive_path_val,
             "total_rows": total_rows,
             "date_coverage": {
                 "min_date": min_date,

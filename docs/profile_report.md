@@ -4,7 +4,10 @@
 **Phase:** Phase 3 (Full-Corpus Profiling Before Filtering or Sampling)  
 **Author:** Research Engineering Agent  
 **Date:** 2026-11-14  
-**Status:** **EMPIRICALLY VERIFIED**
+**Status:** **EMPIRICALLY VERIFIED (Developer Workstation Snapshot)**
+
+> [!NOTE]
+> **Execution Context & Verification Scope:** The comprehensive figures and tail distributions reported herein reflect empirical profiling executed on a 64-bit developer workstation (win32) directly against the full uncompressed/zipped raw FOIA archive (`CCDB_Export_2_May_2018_through_April_2021.zip`, SHA-256: `4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45`, ~55s runtime, ~140 MB peak RSS). Hosted CI runners validate committed profile manifests, schema contracts, and deterministic synthetic unit tests without re-scanning the multi-gigabyte raw archive when uncached.
 
 ---
 
@@ -21,6 +24,11 @@ In accordance with `SYSTEM.md` and the *Dataset Preparation Handover*, profiling
 4. **Length Distribution & Context Tail:** The median narrative length is **122 words** (675 characters). The 95th percentile is **572 words** (3,189 characters), and the 99th percentile is **1,162 words** (6,513 characters).
 5. **Exact Template Duplication:** 56,822 narratives (**12.92%**) are exact textual duplicates of other complaints. The top credit-repair form template occurs **808 times** under identical text.
 6. **Unique ID Integrity:** 0 duplicate complaint IDs across all 1,041,632 records (100.0% unique).
+
+### Computational & Memory Profile:
+* **Execution Architecture:** Single-pass streaming via `csv.reader` wrapping `TextIOWrapper` over zip stream (`src/data/profiler.py`).
+* **Memory Footprint:** Peak RSS $\approx 140\text{ MB}$. (Retains 1,041,632 complaint IDs in `set` for duplicate ID detection, 383,038 unique SHA-256 narrative hashes in `Counter` for exact duplicate clustering, and 439,860 compact C integer array elements for exact quantile sorting. This represents an $O(N)$ retained state streaming model rather than constant $O(1)$ memory).
+* **Workstation Runtime:** 54.8 seconds elapsed for all 1,041,632 records.
 
 ---
 
@@ -99,8 +107,8 @@ Length statistics for the 439,860 free-text narratives:
   * $> 1,000$ words: 6,076 records (**1.38%**).
   * $> 2,000$ words: 991 records (**0.23%**).
 
-> [!TIP]
-> Under a standard Transformer context budget of 512 subword tokens (roughly $\approx 350\text{--}400$ whitespace words), approximately **90%** of narratives fit without any truncation. A maximum sequence length of 512 captures through the 90th percentile ($p90 = 398\text{ words}$), while truncating roughly 10% of longer narratives.
+> [!NOTE]
+> **Subword Tokenization Deferral:** Sequence length distributions reported here reflect character and whitespace-word metrics exclusively. Exact subword token length distributions are model- and tokenizer-dependent (e.g., SentencePiece unigram for XLM-V / InfoXLM vs. BPE for RoBERTa) and are deferred to Phase 4 / Phase B tokenization pipelines using the frozen tokenizer checkpoints. Whitespace-word percentiles ($p50 = 122$, $p90 = 398$, $p95 = 572$, $p99 = 1,162$) provide lexical length baseline metrics, but do not imply exact 512-subword token coverage.
 
 ---
 

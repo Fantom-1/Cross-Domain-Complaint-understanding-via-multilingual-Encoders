@@ -1,6 +1,7 @@
 """Unit tests for Phase 3: Full-corpus profiling before filtering or sampling."""
 
 import csv
+import io
 import json
 import os
 import sys
@@ -9,6 +10,9 @@ import unittest
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
+
+from src.data.parser import CFPB_BULK_COLUMNS, CFPB_FOIA_COLUMNS
+from src.data.profiler import CorpusProfiler
 
 MANIFEST_DIR = os.path.join(REPO_ROOT, "data", "manifests")
 PROFILE_JSON_PATH = os.path.join(MANIFEST_DIR, "source_profile.json")
@@ -195,6 +199,141 @@ class TestPhase3Profiling(unittest.TestCase):
         self.assertIn("56,822", content)
         self.assertIn("12.92%", content)
         self.assertIn("PolyAI/banking77", content)
+
+    def test_11_profiler_missingness_and_narrative_counting(self):
+        """Asserts deterministic fixture-based missingness and narrative counting on in-memory stream."""
+        rows = [
+            {"Complaint ID": "1001", "Date received": "2020-01-01", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": "First valid narrative text here.", "State": "CA"},
+            {"Complaint ID": "1002", "Date received": "2020-01-02", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": "Second narrative text is present.", "State": "NY"},
+            {"Complaint ID": "1003", "Date received": "2020-01-03", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": "Third narrative with enough words.", "State": ""},
+            {"Complaint ID": "1004", "Date received": "2020-01-04", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": "", "State": "TX"},
+            {"Complaint ID": "1005", "Date received": "2020-01-05", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": "   ", "State": ""},
+            {"Complaint ID": "1006", "Date received": "2020-01-06", "Product": "Credit card", "Issue": "Billing", "Consumer complaint narrative": None, "State": "FL"},
+        ]
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(CFPB_FOIA_COLUMNS)
+        for r in rows:
+            writer.writerow([r.get(c, "") or "" for c in CFPB_FOIA_COLUMNS])
+        buf.seek(0)
+
+        profiler = CorpusProfiler()
+        result = profiler.profile_cfpb_foia_archive(buf)
+
+        self.assertEqual(result["total_rows"], 6)
+        narr_prof = result["narrative_profile"]
+        self.assertEqual(narr_prof["narratives_present"], 3)
+        self.assertEqual(narr_prof["narratives_missing"], 3)
+        self.assertEqual(narr_prof["narrative_availability_rate_percent"], 50.0)
+        
+        field_nulls = result["field_missingness"]
+        self.assertEqual(field_nulls["State"]["null_count"], 2)
+        self.assertEqual(field_nulls["State"]["non_null_count"], 4)
+
+    def test_12_profiler_exact_duplicate_and_boilerplate_clustering(self):
+        """Asserts deterministic duplicate detection and boilerplate frequency counting."""
+        repeated_template = "This is a standard repeated dispute template pursuant to FCRA regulations."
+        rows = [
+            {"Complaint ID": f"200{i}", "Date received": "2020-01-01", "Product": "Credit reporting", "Issue": "Incorrect info", "Consumer complaint narrative": repeated_template}
+            for i in range(4)
+        ]
+        rows.append({"Complaint ID": "2010", "Date received": "2020-01-02", "Product": "Mortgage", "Issue": "Trouble", "Consumer complaint narrative": "Unique text complaint alpha."})
+        rows.append({"Complaint ID": "2011", "Date received": "2020-01-03", "Product": "Debt collection", "Issue": "Debt not owed", "Consumer complaint narrative": "Unique text complaint beta."})
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(CFPB_FOIA_COLUMNS)
+        for r in rows:
+            writer.writerow([r.get(c, "") or "" for c in CFPB_FOIA_COLUMNS])
+        buf.seek(0)
+
+        profiler = CorpusProfiler()
+        result = profiler.profile_cfpb_foia_archive(buf)
+
+        dups = result["narrative_profile"]["exact_duplicates"]
+        self.assertEqual(dups["total_narratives"], 6)
+        self.assertEqual(dups["unique_narratives"], 3)
+        self.assertEqual(dups["exact_duplicates_count"], 3)
+        self.assertEqual(dups["top_duplicate_hash_frequencies"][0]["occurrences"], 4)
+
+    def test_13_profiler_natural_class_distribution_mapping(self):
+        """Asserts weak intent classification across project taxonomy classes on synthetic stream."""
+        rows = [
+            {"Complaint ID": "3001", "Date received": "2020-01-01", "Product": "Credit reporting, credit repair services, or other personal consumer reports", "Issue": "Incorrect information on your report", "Sub-issue": "Information belongs to someone else", "Consumer complaint narrative": "Someone else's account is on my file."},
+            {"Complaint ID": "3002", "Date received": "2020-01-02", "Product": "Credit reporting, credit repair services, or other personal consumer reports", "Issue": "Problem with a credit reporting company's investigation into an existing problem", "Sub-issue": "Investigation took more than 30 days", "Consumer complaint narrative": "The bureau took 60 days to complete investigation."},
+            {"Complaint ID": "3003", "Date received": "2020-01-03", "Product": "Debt collection", "Issue": "Attempts to collect debt not owed", "Sub-issue": "Debt is not yours", "Consumer complaint narrative": "This collection agency contacted me about debt that is not mine."},
+        ]
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(CFPB_FOIA_COLUMNS)
+        for r in rows:
+            writer.writerow([r.get(c, "") or "" for c in CFPB_FOIA_COLUMNS])
+        buf.seek(0)
+
+        profiler = CorpusProfiler()
+        result = profiler.profile_cfpb_foia_archive(buf)
+
+        counts = result["natural_class_distribution"]["counts"]
+        self.assertGreaterEqual(counts.get("reporting_incorrect_information", 0), 1)
+        self.assertGreaterEqual(counts.get("reporting_investigation_dispute", 0), 1)
+        self.assertGreaterEqual(counts.get("debt_not_owed", 0), 1)
+
+    def test_14_profiler_rejects_ineligible_schema(self):
+        """Asserts that profile_cfpb_foia_archive raises ValueError when passed a 15-column active feed."""
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(CFPB_BULK_COLUMNS)  # 15 columns, missing Consumer complaint narrative
+        writer.writerow(["2020-01-01", "Credit card", "General", "Billing", "Late fee", "Resp", "Bank", "CA", "90210", "", "Web", "2020-01-02", "Closed", "Yes", "999"])
+        buf.seek(0)
+
+        profiler = CorpusProfiler()
+        with self.assertRaises(ValueError) as cm:
+            profiler.profile_cfpb_foia_archive(buf)
+        self.assertIn("16-column", str(cm.exception))
+
+    def test_15_profiler_rejects_malformed_rows_after_valid_rows(self):
+        """Asserts that malformed short or overflow rows following valid rows cause ValueError."""
+        # Short row test
+        buf_short = io.StringIO(
+            "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,Company response to consumer,Timely response?,Complaint ID\n"
+            "2020-01-01,Credit card,General,Billing,Late fee,Valid narrative one,Response,Bank,CA,90210,,Web,2020-01-02,Closed,Yes,9991\n"
+            "2020-01-02,Credit card,General,Billing,Late fee,Valid narrative two,Response,Bank,CA,90210,,Web,2020-01-03,Closed,Yes,9992\n"
+            "MALFORMED,SHORT,ROW,ONLY,FIVE\n"
+            "2020-01-03,Credit card,General,Billing,Late fee,Valid narrative three,Response,Bank,CA,90210,,Web,2020-01-04,Closed,Yes,9993\n"
+        )
+        profiler = CorpusProfiler()
+        with self.assertRaises(ValueError) as cm:
+            profiler.profile_cfpb_foia_archive(buf_short)
+        self.assertIn("malformed", str(cm.exception).lower())
+
+        # Overflow row test
+        buf_overflow = io.StringIO(
+            "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,Company response to consumer,Timely response?,Complaint ID\n"
+            "2020-01-01,Credit card,General,Billing,Late fee,Valid narrative one,Response,Bank,CA,90210,,Web,2020-01-02,Closed,Yes,9991\n"
+            "2020-01-02,Credit card,General,Billing,Late fee,Overflow,Response,Bank,CA,90210,,Web,2020-01-03,Closed,Yes,9992,OVERFLOW1,OVERFLOW2\n"
+        )
+        with self.assertRaises(ValueError) as cm:
+            profiler.profile_cfpb_foia_archive(buf_overflow)
+        self.assertIn("malformed", str(cm.exception).lower())
+
+    def test_16_profiler_max_rows_exact_accounting(self):
+        """Asserts that max_rows caps streaming without off-by-one errors."""
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(CFPB_FOIA_COLUMNS)
+        for i in range(10):
+            writer.writerow([
+                "2020-01-01", "Credit card", "General", "Billing", "Late fee",
+                f"Narrative row {i} with sufficient words.", "Resp", "Bank", "CA", "90210", "", "Web",
+                "2020-01-02", "Closed", "Yes", f"888{i}"
+            ])
+        buf.seek(0)
+
+        profiler = CorpusProfiler()
+        result = profiler.profile_cfpb_foia_archive(buf, max_rows=5)
+        self.assertEqual(result["total_rows"], 5, "Total rows must exactly equal max_rows=5")
+        self.assertEqual(result["narrative_profile"]["total_rows"], 5)
 
 
 if __name__ == "__main__":
