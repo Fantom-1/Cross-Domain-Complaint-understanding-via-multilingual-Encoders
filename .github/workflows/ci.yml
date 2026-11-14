@@ -30,3 +30,11 @@ jobs:
       - name: Run Phase 1 Audit
         run: |
           python scripts/audit_phase1.py
+
+      - name: Run Phase 2 Parsing Tests
+        run: |
+          python -m unittest tests/data/test_phase2_parsing.py
+
+      - name: Run Phase 2 Audit
+        run: |
+          python scripts/audit_phase2.py
