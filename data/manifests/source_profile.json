@@ -1,0 +1,587 @@
+{
+  "archive_name": "CCDB_Export_2_May_2018_through_April_2021.zip",
+  "archive_path": "D:\\NLP\\data\\raw\\cfpb\\CCDB_Export_2_May_2018_through_April_2021.zip",
+  "total_rows": 1041632,
+  "date_coverage": {
+    "min_date": "2018-05-01",
+    "max_date": "2021-04-30",
+    "year_counts": {
+      "2018": 163605,
+      "2019": 277240,
+      "2020": 444213,
+      "2021": 156574
+    },
+    "year_month_counts": {
+      "2018-05": 22321,
+      "2018-06": 20092,
+      "2018-07": 20945,
+      "2018-08": 21710,
+      "2018-09": 19064,
+      "2018-10": 21883,
+      "2018-11": 19046,
+      "2018-12": 18544,
+      "2019-01": 18926,
+      "2019-02": 20194,
+      "2019-03": 23400,
+      "2019-04": 22905,
+      "2019-05": 23841,
+      "2019-06": 23335,
+      "2019-07": 25070,
+      "2019-08": 26043,
+      "2019-09": 23565,
+      "2019-10": 25624,
+      "2019-11": 22641,
+      "2019-12": 21696,
+      "2020-01": 26394,
+      "2020-02": 25079,
+      "2020-03": 29480,
+      "2020-04": 34794,
+      "2020-05": 36987,
+      "2020-06": 37888,
+      "2020-07": 40639,
+      "2020-08": 39187,
+      "2020-09": 39874,
+      "2020-10": 43975,
+      "2020-11": 41541,
+      "2020-12": 48375,
+      "2021-01": 42475,
+      "2021-02": 33262,
+      "2021-03": 41172,
+      "2021-04": 39665
+    }
+  },
+  "narrative_profile": {
+    "total_rows": 1041632,
+    "narratives_present": 439860,
+    "narratives_missing": 601772,
+    "narrative_availability_rate_percent": 42.23,
+    "char_length_stats": {
+      "count": 439860,
+      "min": 4,
+      "max": 32394,
+      "mean": 1056.84,
+      "std": 1385.16,
+      "p1": 49.0,
+      "p5": 118.0,
+      "p10": 182.0,
+      "p25": 359.0,
+      "p50": 675.0,
+      "p75": 1256.0,
+      "p90": 2211.0,
+      "p95": 3189.0,
+      "p99": 6513.41
+    },
+    "word_length_stats": {
+      "count": 439860,
+      "min": 1,
+      "max": 6014,
+      "mean": 189.33,
+      "std": 243.28,
+      "p1": 8.0,
+      "p5": 21.0,
+      "p10": 32.0,
+      "p25": 64.0,
+      "p50": 122.0,
+      "p75": 226.0,
+      "p90": 398.0,
+      "p95": 572.0,
+      "p99": 1162.41
+    },
+    "length_cutoffs": {
+      "words_lt_10": 5988,
+      "words_lt_20": 19838,
+      "words_lt_50": 78550,
+      "words_gt_500": 28239,
+      "words_gt_1000": 6076,
+      "words_gt_2000": 991,
+      "words_lt_20_percent": 4.51
+    },
+    "formatting_anomalies": {
+      "multiline_narratives": 161588,
+      "multiline_percent": 36.74,
+      "redaction_marker_narratives": 354015,
+      "redaction_marker_percent": 80.48,
+      "control_char_narratives": 8,
+      "whitespace_padded_narratives": 0
+    },
+    "exact_duplicates": {
+      "total_narratives": 439860,
+      "unique_narratives": 383038,
+      "exact_duplicates_count": 56822,
+      "exact_duplicate_rate_percent": 12.92,
+      "top_duplicate_hash_frequencies": [
+        {
+          "sha256": "a6cc69e13672aa6942db0b4fa7173412c3c5c034c8398da8b4c88bde8307d775",
+          "occurrences": 808
+        },
+        {
+          "sha256": "253c5745239ac5f2b311c5219ef2482b3513f6ec1178bb3d8cb66e5ea76606db",
+          "occurrences": 552
+        },
+        {
+          "sha256": "b1d7a77374dd98e25b24631310f1ed3c78ce79d8b9b65767f49e3560b8759ce4",
+          "occurrences": 522
+        },
+        {
+          "sha256": "95f49642e8b0cd07e77544710e00cc64b6f5ca1661893fd191f5f6b25939b4f8",
+          "occurrences": 499
+        },
+        {
+          "sha256": "67fad14d275270478b0ae933cdcdcf599307c7e8cef738e295312f3f14ff41a2",
+          "occurrences": 400
+        },
+        {
+          "sha256": "5131ed955d279f93039b85ad8720a67393fa94427200f95029671960bc9ea8ce",
+          "occurrences": 399
+        },
+        {
+          "sha256": "2d433027f727b26e7dec63c56168767c284fbf6bf1d1c84868d459b82365d3b2",
+          "occurrences": 395
+        },
+        {
+          "sha256": "f37cc9ee71977861a15d4346776a326e5471b676e0d14feb7a33fa6c14ed0045",
+          "occurrences": 324
+        },
+        {
+          "sha256": "11f961f0cab8dfc95dd7b563ac3b10c3198dcea5ba7f7df2741b44dba5a1e463",
+          "occurrences": 269
+        },
+        {
+          "sha256": "cf849c44ebff359d97681c6efc95f54a84536bf19a8b07c346cd7b01c795f4b5",
+          "occurrences": 259
+        }
+      ]
+    }
+  },
+  "field_missingness": {
+    "Date received": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Product": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Sub-product": {
+      "null_count": 64,
+      "non_null_count": 1041568,
+      "null_rate_percent": 0.01
+    },
+    "Issue": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Sub-issue": {
+      "null_count": 113098,
+      "non_null_count": 928534,
+      "null_rate_percent": 10.86
+    },
+    "Consumer complaint narrative": {
+      "null_count": 601772,
+      "non_null_count": 439860,
+      "null_rate_percent": 57.77
+    },
+    "Company public response": {
+      "null_count": 493215,
+      "non_null_count": 548417,
+      "null_rate_percent": 47.35
+    },
+    "Company": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "State": {
+      "null_count": 23472,
+      "non_null_count": 1018160,
+      "null_rate_percent": 2.25
+    },
+    "ZIP code": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Tags": {
+      "null_count": 922317,
+      "non_null_count": 119315,
+      "null_rate_percent": 88.55
+    },
+    "Submitted via": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Date sent to company": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Company response to consumer": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Timely response?": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    },
+    "Complaint ID": {
+      "null_count": 0,
+      "non_null_count": 1041632,
+      "null_rate_percent": 0.0
+    }
+  },
+  "categorical_distributions": {
+    "product_counts": {
+      "Credit reporting, credit repair services, or other personal consumer reports": 586714,
+      "Debt collection": 154699,
+      "Credit card or prepaid card": 86586,
+      "Mortgage": 72510,
+      "Checking or savings account": 69895,
+      "Money transfer, virtual currency, or money service": 21448,
+      "Vehicle loan or lease": 18720,
+      "Student loan": 18456,
+      "Payday loan, title loan, or personal loan": 12604
+    },
+    "canonical_product_counts": {
+      "credit_reporting": 586714,
+      "debt_collection": 154699,
+      "credit_card": 86586,
+      "mortgage": 72510,
+      "bank_account": 69895,
+      "money_transfer": 21448,
+      "vehicle_loan": 18720,
+      "student_loan": 18456,
+      "payday_personal_loan": 12604
+    },
+    "top_sub_products": {
+      "Credit reporting": 580200,
+      "General-purpose credit card or charge card": 63881,
+      "Checking account": 54259,
+      "Conventional home mortgage": 45477,
+      "Other debt": 42057,
+      "Credit card debt": 37430,
+      "I do not know": 34664,
+      "Medical debt": 23998,
+      "Loan": 15530,
+      "Store credit card": 12632,
+      "Federal student loan servicing": 12284,
+      "FHA mortgage": 10546,
+      "Other banking product or service": 8784,
+      "Mobile or digital wallet": 8212,
+      "Other type of mortgage": 6583,
+      "Private student loan": 6172,
+      "Domestic (US) money transfer": 5778,
+      "Government benefit card": 5589,
+      "Auto debt": 5574,
+      "Installment loan": 5428
+    },
+    "top_issues": {
+      "Incorrect information on your report": 389802,
+      "Problem with a credit reporting company's investigation into an existing problem": 146733,
+      "Attempts to collect debt not owed": 77303,
+      "Managing an account": 44261,
+      "Improper use of your report": 41803,
+      "Trouble during payment process": 34860,
+      "Written notification about debt": 34479,
+      "Problem with a purchase shown on your statement": 21825,
+      "Struggling to pay mortgage": 18701,
+      "Communication tactics": 13743,
+      "Took or threatened to take negative or legal action": 12969,
+      "False statements or representation": 12891,
+      "Dealing with your lender or servicer": 12149,
+      "Applying for a mortgage or refinancing an existing mortgage": 10024,
+      "Other features, terms, or problems": 9484,
+      "Problem when making payments": 9285,
+      "Unable to get your credit report or credit score": 9087,
+      "Fees or interest": 9028,
+      "Closing an account": 8749,
+      "Getting a credit card": 7663,
+      "Problem with fraud alerts or security freezes": 7484,
+      "Fraud or scam": 6970,
+      "Opening an account": 6611,
+      "Managing the loan or lease": 6367,
+      "Closing on a mortgage": 6312
+    },
+    "top_sub_issues": {
+      "Information belongs to someone else": 258770,
+      "Their investigation did not fix an error on your report": 76577,
+      "Account status incorrect": 44726,
+      "Account information incorrect": 41764,
+      "Debt is not yours": 38470,
+      "Investigation took more than 30 days": 34740,
+      "Credit inquiries on your report that you don't recognize": 29560,
+      "Didn't receive enough information to verify debt": 24867,
+      "Was not notified of investigation status or results": 24652,
+      "Debt was result of identity theft": 22256,
+      "Personal information incorrect": 20708,
+      "Deposits and withdrawals": 15644,
+      "Credit card company isn't resolving a dispute about a purchase on your statement": 15182,
+      "Debt was paid": 13951,
+      "Reporting company used your report improperly": 11492,
+      "Attempted to collect wrong amount": 10476,
+      "Old information reappears or never goes away": 8755,
+      "Didn't receive notice of right to dispute": 8706,
+      "Public record information inaccurate": 8484,
+      "Company closed your account": 8233,
+      "Problem using a debit or ATM card": 7809,
+      "Frequent or repeated calls": 7351,
+      "Difficulty submitting a dispute or getting information about a dispute over the phone": 7217,
+      "Problem during payment process": 6084,
+      "Card was charged for something you did not purchase with the card": 6080
+    },
+    "top_product_issues": {
+      "Credit reporting, credit repair services, or other personal consumer reports || Incorrect information on your report": 380910,
+      "Credit reporting, credit repair services, or other personal consumer reports || Problem with a credit reporting company's investigation into an existing problem": 142757,
+      "Debt collection || Attempts to collect debt not owed": 77303,
+      "Checking or savings account || Managing an account": 44261,
+      "Credit reporting, credit repair services, or other personal consumer reports || Improper use of your report": 40716,
+      "Mortgage || Trouble during payment process": 34860,
+      "Debt collection || Written notification about debt": 34479,
+      "Credit card or prepaid card || Problem with a purchase shown on your statement": 21825,
+      "Mortgage || Struggling to pay mortgage": 18700,
+      "Debt collection || Communication tactics": 13743,
+      "Debt collection || Took or threatened to take negative or legal action": 12969,
+      "Debt collection || False statements or representation": 12891,
+      "Student loan || Dealing with your lender or servicer": 12148,
+      "Mortgage || Applying for a mortgage or refinancing an existing mortgage": 10024,
+      "Credit card or prepaid card || Other features, terms, or problems": 9484,
+      "Credit card or prepaid card || Fees or interest": 9028,
+      "Credit reporting, credit repair services, or other personal consumer reports || Unable to get your credit report or credit score": 8925,
+      "Checking or savings account || Closing an account": 8749,
+      "Credit card or prepaid card || Problem when making payments": 7745,
+      "Credit card or prepaid card || Getting a credit card": 7662,
+      "Credit reporting, credit repair services, or other personal consumer reports || Problem with fraud alerts or security freezes": 7381,
+      "Checking or savings account || Opening an account": 6611,
+      "Money transfer, virtual currency, or money service || Fraud or scam": 6436,
+      "Vehicle loan or lease || Managing the loan or lease": 6367,
+      "Mortgage || Closing on a mortgage": 6312
+    },
+    "submitted_via": {
+      "Web": 902817,
+      "Referral": 58098,
+      "Phone": 50362,
+      "Postal mail": 20171,
+      "Fax": 10126,
+      "Email": 58
+    },
+    "company_response": {
+      "Closed with explanation": 899942,
+      "Closed with non-monetary relief": 101756,
+      "Closed with monetary relief": 36986,
+      "Untimely response": 2947,
+      "In progress": 1
+    },
+    "timely_response": {
+      "Yes": 1028389,
+      "No": 13243
+    },
+    "tags": {
+      "Servicemember": 75807,
+      "Older American": 33198,
+      "Older American, Servicemember": 10310
+    },
+    "top_states": {
+      "FL": 126804,
+      "CA": 126768,
+      "TX": 106694,
+      "NY": 70757,
+      "GA": 63567,
+      "PA": 44229,
+      "IL": 37474,
+      "NJ": 33836,
+      "NC": 31306,
+      "OH": 26987,
+      "MD": 23710,
+      "VA": 23264,
+      "TN": 22508,
+      "AL": 20282,
+      "MI": 19745
+    }
+  },
+  "temporal_drift": {
+    "product_by_year": {
+      "2018": {
+        "credit_reporting": 72080,
+        "debt_collection": 31718,
+        "credit_card": 15709,
+        "mortgage": 15199,
+        "bank_account": 14184,
+        "student_loan": 5471,
+        "vehicle_loan": 3715,
+        "payday_personal_loan": 2772,
+        "money_transfer": 2757
+      },
+      "2019": {
+        "credit_reporting": 138556,
+        "debt_collection": 46333,
+        "credit_card": 25823,
+        "mortgage": 22701,
+        "bank_account": 21734,
+        "student_loan": 7208,
+        "vehicle_loan": 5485,
+        "money_transfer": 5082,
+        "payday_personal_loan": 4318
+      },
+      "2020": {
+        "credit_reporting": 283715,
+        "debt_collection": 53868,
+        "credit_card": 33879,
+        "mortgage": 24652,
+        "bank_account": 24238,
+        "money_transfer": 8306,
+        "vehicle_loan": 6971,
+        "student_loan": 4385,
+        "payday_personal_loan": 4199
+      },
+      "2021": {
+        "credit_reporting": 92363,
+        "debt_collection": 22780,
+        "credit_card": 11175,
+        "mortgage": 9958,
+        "bank_account": 9739,
+        "money_transfer": 5303,
+        "vehicle_loan": 2549,
+        "student_loan": 1392,
+        "payday_personal_loan": 1315
+      }
+    }
+  },
+  "integrity_checks": {
+    "duplicate_complaint_id_count": 0,
+    "complaint_id_integrity": "PASSED"
+  },
+  "natural_class_distribution": {
+    "total_narratives_evaluated": 439860,
+    "counts": {
+      "reporting_incorrect_information": 128540,
+      "reporting_investigation_dispute": 68225,
+      "payment_problem": 35804,
+      "debt_not_owed": 27170,
+      "reporting_improper_use": 24124,
+      "debt_communication": 22673,
+      "fraud_or_scam": 19728,
+      "transaction_problem": 18862,
+      "debt_threats": 18489,
+      "account_management": 16444,
+      "credit_terms_dispute": 14916,
+      "servicing_dispute": 13478,
+      "application_problem": 8961,
+      "funds_availability": 8737,
+      "account_access": 7758,
+      "closing_process": 3768,
+      "unmapped": 2183
+    },
+    "percentages": {
+      "reporting_incorrect_information": 29.22,
+      "reporting_investigation_dispute": 15.51,
+      "payment_problem": 8.14,
+      "debt_not_owed": 6.18,
+      "reporting_improper_use": 5.48,
+      "debt_communication": 5.15,
+      "fraud_or_scam": 4.49,
+      "transaction_problem": 4.29,
+      "debt_threats": 4.2,
+      "account_management": 3.74,
+      "credit_terms_dispute": 3.39,
+      "servicing_dispute": 3.06,
+      "application_problem": 2.04,
+      "funds_availability": 1.99,
+      "account_access": 1.76,
+      "closing_process": 0.86,
+      "unmapped": 0.5
+    }
+  },
+  "banking77": {
+    "train": {
+      "rows": 10003,
+      "columns": [
+        "text",
+        "category"
+      ],
+      "null_count": 0,
+      "num_categories": 77,
+      "char_stats": {
+        "count": 10003,
+        "min": 13,
+        "max": 433,
+        "mean": 59.47,
+        "std": 40.87,
+        "p1": 20.0,
+        "p5": 26.0,
+        "p10": 29.0,
+        "p25": 36.0,
+        "p50": 47.0,
+        "p75": 64.0,
+        "p90": 109.8,
+        "p95": 151.9,
+        "p99": 220.98
+      },
+      "word_stats": {
+        "count": 10003,
+        "min": 2,
+        "max": 79,
+        "mean": 11.95,
+        "std": 7.89,
+        "p1": 4.0,
+        "p5": 5.0,
+        "p10": 6.0,
+        "p25": 7.0,
+        "p50": 10.0,
+        "p75": 13.0,
+        "p90": 22.0,
+        "p95": 29.0,
+        "p99": 43.0
+      },
+      "min_per_class": 35,
+      "max_per_class": 187
+    },
+    "test": {
+      "rows": 3080,
+      "columns": [
+        "text",
+        "category"
+      ],
+      "null_count": 0,
+      "num_categories": 77,
+      "char_stats": {
+        "count": 3080,
+        "min": 13,
+        "max": 368,
+        "mean": 54.23,
+        "std": 34.65,
+        "p1": 20.0,
+        "p5": 24.0,
+        "p10": 28.0,
+        "p25": 35.0,
+        "p50": 45.0,
+        "p75": 60.0,
+        "p90": 90.0,
+        "p95": 124.0,
+        "p99": 199.42
+      },
+      "word_stats": {
+        "count": 3080,
+        "min": 2,
+        "max": 69,
+        "mean": 10.95,
+        "std": 6.69,
+        "p1": 4.0,
+        "p5": 5.0,
+        "p10": 6.0,
+        "p25": 7.0,
+        "p50": 9.0,
+        "p75": 12.0,
+        "p90": 18.0,
+        "p95": 24.0,
+        "p99": 38.21
+      },
+      "min_per_class": 40,
+      "max_per_class": 40
+    }
+  }
+}
