@@ -1,6 +1,6 @@
 # Phase 2 Audit Report: Robust Parsing & Schema Diff
 
-- **Audit Execution Date:** 2026-11-14T18:22:53.704823+00:00
+- **Audit Execution Date:** 2026-11-14T18:32:48.432168+00:00
 - **Execution Environment:** Developer Workstation (win32)
 - **Workspace Root:** `D:\NLP`
 - **Overall Verdict:** **PASSED**
@@ -11,10 +11,11 @@
 | :--- | :--- | :---: | :--- |
 | **1. Storage Preflight** | Disk space availability | PASS | 20.10 GB free on workspace drive (threshold: >= 15.0 GB) |
 | **2. Parser Implementation** | Stream generator & Windows limit | PASS | SAFE_FIELD_SIZE_LIMIT <= 2^31 - 1, 16/15/2 col schemas, strict validation |
-| **3. Parse Error Manifest** | Schema & 0-error integrity | PASS | Verified 0 errors across 4 datasets; structured provenance validated |
-| **4. Documentation** | Field semantics & schema diff | PASS | Epistemological boundaries, 80 FR 15572, and 2026 deprecation documented |
-| **5. Empirical Smoke** | Real archive streaming | PASS | Local archives parse cleanly without memory bloat or delimiter crashes |
-| **6. Unit Test Suites** | Full regression coverage | PASS | 34 tests executed (Phase 2, Phase 1, Phase 0) with 0 failures |
+| **3. Scan Metadata Manifests** | Schema & 0-error integrity | PASS | 4 scan records schema-valid; version phase2.1-v1.0 verified |
+| **4. Archive Checksum Verification** | Raw archive SHA-256 match | PASS | 4 / 4 raw archives checksum-verified locally |
+| **5. Documentation Completeness** | Field semantics & schema diff | PASS | Epistemological boundaries, 80 FR 15572, and 2026 deprecation documented |
+| **6. Empirical Ingestion Smoke** | Real archive streaming | PASS | Local archives parse cleanly without memory bloat or delimiter crashes |
+| **7. Unit Test Suite Execution** | Full regression coverage | PASS | 37 tests executed (Phase 2, Phase 1, Phase 0) with 0 failures |
 
 ## Detailed Execution Log
 
@@ -29,25 +30,24 @@
 [PASS ] CFPB_FOIA_COLUMNS has 16 columns including narrative
 [PASS ] CFPB_BULK_COLUMNS has 15 columns (narrative correctly omitted)
 [PASS ] BANKING77_COLUMNS matches ['text', 'category']
-[INFO ] --- Pillar 3: Parse Error Manifest & Full-Scan Provenance Invariants ---
+[INFO ] --- Pillar 3: Scan Metadata Manifests & Parse Errors ---
 [PASS ] data/manifests/parse_errors.csv and full_scan_provenance.csv exist
 [PASS ] Exact 7-column schema validated in parse_errors.csv: ['archive_name', 'file_name', 'line_number', 'complaint_id', 'error_type', 'error_details', 'raw_snippet']
 [PASS ] Cataloged 4 verification records across scanned datasets
 [PASS ] full_scan_provenance.csv contains all required structured provenance fields
-[PASS ] Verified provenance record: CCDB_Export_2_May_2018_through_April_2021.zip (Verified scan record: CCDB_Export_2_May_2018_through_April_2021.zip (1,041,632 records, 0 errors))
-[PASS ] Verified provenance record: complaints.csv.zip (Verified scan record: complaints.csv.zip (18,560,908 records, 0 errors))
-[PASS ] Verified provenance record: train.csv (Verified scan record: train.csv (10,003 records, 0 errors))
-[PASS ] Verified provenance record: test.csv (Verified scan record: test.csv (3,080 records, 0 errors))
-[INFO ] --- Pillar 4: Documentation Completeness & Semantic Governance ---
+[PASS ] Validated structured metadata across all 4 dataset records
+[INFO ] --- Pillar 4: Raw Archive Checksum Verification ---
+[PASS ] All 4 raw archives checksum-verified locally against source_sha256
+[INFO ] --- Pillar 5: Documentation Completeness & Semantic Governance ---
 [PASS ] docs/field_semantics.md exists
 [PASS ] field_semantics.md documents weak administrative labels and 80 FR 15572 consent
 [PASS ] field_semantics.md documents both CFPB and auxiliary benchmark modalities
 [PASS ] docs/schema_diff.md exists
 [PASS ] schema_diff.md documents August 14, 2026 narrative deprecation and 15 vs 16 column shift
 [PASS ] schema_diff.md documents multiline (36.74%), quotes (11.97%), and Windows LLP64 limit
-[INFO ] --- Pillar 5: Empirical Ingestion Smoke Checks ---
+[INFO ] --- Pillar 6: Empirical Ingestion Smoke Checks ---
 [PASS ] Empirical smoke test: successfully streamed 100 rows from local CCDB_Export_2
-[INFO ] --- Pillar 6: Unit Test Suite Execution ---
-[PASS ] Test suites PASSED (34 tests executed: Phase 2, Phase 1, Phase 0)
+[INFO ] --- Pillar 7: Unit Test Suite Execution ---
+[PASS ] Test suites PASSED (37 tests executed: Phase 2, Phase 1, Phase 0)
 [INFO ] OVERALL AUDIT VERDICT: **PASSED**
 ```

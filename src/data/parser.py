@@ -417,6 +417,27 @@ def compute_file_sha256(filepath: Union[str, Path]) -> str:
     return h.hexdigest()
 
 
+PROVENANCE_STATUS_CHECKSUM_VERIFIED: str = "CHECKSUM_VERIFIED"
+PROVENANCE_STATUS_METADATA_ONLY: str = "METADATA_VALID_SOURCE_UNAVAILABLE"
+PROVENANCE_STATUS_FAILED: str = "FAILED"
+
+
+@dataclasses.dataclass
+class ProvenanceVerificationResult:
+    """Detailed outcome of a scan provenance verification check."""
+    status: str  # CHECKSUM_VERIFIED | METADATA_VALID_SOURCE_UNAVAILABLE | FAILED
+    is_valid_metadata: bool
+    is_checksum_verified: bool
+    source_archive: str
+    message: str
+
+    def to_tuple(self) -> Tuple[str, str]:
+        return (self.status, self.message)
+
+    def __iter__(self):
+        return iter((self.status, self.message))
+
+
 REQUIRED_PROVENANCE_FIELDS = [
     "source_archive",
     "source_inner_file",
@@ -440,22 +461,40 @@ def verify_scan_provenance_record(
     repo_root: Optional[Union[str, Path]] = None,
     verify_local_file: bool = True,
     expected_parser_version: Optional[str] = None,
-) -> Tuple[bool, str]:
+) -> ProvenanceVerificationResult:
     """Verifies a single scan provenance record against schema and local artifacts.
     
-    Returns:
-        (is_valid: bool, status_message: str)
+    Distinguishes three explicit outcomes:
+    1. CHECKSUM_VERIFIED: Record metadata is valid and local file SHA-256 matches bit-for-bit.
+    2. METADATA_VALID_SOURCE_UNAVAILABLE: Record metadata is valid, but the source file
+       is uncached / not present on disk (typical in hosted CI runner environments).
+    3. FAILED: Metadata schema violation, parser version mismatch, count mismatch,
+       non-zero error count, or SHA-256 hash mismatch.
     """
+    archive_name = str(record.get("source_archive", ""))
+
     # 1. Check all required fields are present and non-empty
     for field in REQUIRED_PROVENANCE_FIELDS:
         val = record.get(field)
         if val is None or str(val).strip() == "":
-            return False, f"Missing or empty required field: {field}"
+            return ProvenanceVerificationResult(
+                status=PROVENANCE_STATUS_FAILED,
+                is_valid_metadata=False,
+                is_checksum_verified=False,
+                source_archive=archive_name,
+                message=f"Missing or empty required field: {field}",
+            )
     
     # 2. Check parser version
     rec_version = str(record.get("parser_version", "")).strip()
     if expected_parser_version is not None and rec_version != expected_parser_version:
-        return False, f"Parser version mismatch: expected {expected_parser_version}, got {rec_version}"
+        return ProvenanceVerificationResult(
+            status=PROVENANCE_STATUS_FAILED,
+            is_valid_metadata=False,
+            is_checksum_verified=False,
+            source_archive=archive_name,
+            message=f"Parser version mismatch: expected {expected_parser_version}, got {rec_version}",
+        )
     
     # 3. Check error count and status
     try:
@@ -463,25 +502,48 @@ def verify_scan_provenance_record(
         rec_count = int(record.get("record_count", 0))
         valid_count = int(record.get("valid_count", 0))
     except (ValueError, TypeError) as e:
-        return False, f"Invalid numeric count in record: {e}"
+        return ProvenanceVerificationResult(
+            status=PROVENANCE_STATUS_FAILED,
+            is_valid_metadata=False,
+            is_checksum_verified=False,
+            source_archive=archive_name,
+            message=f"Invalid numeric count in record: {e}",
+        )
         
     if err_count != 0:
-        return False, f"Non-zero error count in verified scan: {err_count}"
+        return ProvenanceVerificationResult(
+            status=PROVENANCE_STATUS_FAILED,
+            is_valid_metadata=False,
+            is_checksum_verified=False,
+            source_archive=archive_name,
+            message=f"Non-zero error count in verified scan: {err_count}",
+        )
         
     if record.get("scan_status") != "verified_zero_errors":
-        return False, f"Unexpected scan status: {record.get('scan_status')}"
+        return ProvenanceVerificationResult(
+            status=PROVENANCE_STATUS_FAILED,
+            is_valid_metadata=False,
+            is_checksum_verified=False,
+            source_archive=archive_name,
+            message=f"Unexpected scan status: {record.get('scan_status')}",
+        )
         
     if rec_count <= 0 or valid_count != rec_count:
-        return False, f"Count mismatch: record_count={rec_count}, valid_count={valid_count}"
+        return ProvenanceVerificationResult(
+            status=PROVENANCE_STATUS_FAILED,
+            is_valid_metadata=False,
+            is_checksum_verified=False,
+            source_archive=archive_name,
+            message=f"Count mismatch: record_count={rec_count}, valid_count={valid_count}",
+        )
 
     # 4. Local file integrity check (if repo_root is provided and verify_local_file is True)
     if verify_local_file and repo_root is not None:
-        source_archive = str(record.get("source_archive", ""))
         possible_paths = [
-            os.path.join(repo_root, source_archive),
-            os.path.join(repo_root, "data", "raw", "cfpb", source_archive),
-            os.path.join(repo_root, "data", "raw", "banking77", source_archive),
-            os.path.join(repo_root, "data", "raw", source_archive),
+            os.path.join(repo_root, archive_name),
+            os.path.join(repo_root, "data", "raw", "cfpb", archive_name),
+            os.path.join(repo_root, "data", "raw", "banking77", archive_name),
+            os.path.join(repo_root, "data", "raw", archive_name),
         ]
         resolved_path = None
         for p in possible_paths:
@@ -493,9 +555,34 @@ def verify_scan_provenance_record(
             actual_sha = compute_file_sha256(resolved_path)
             expected_sha = str(record.get("source_sha256", "")).lower()
             if actual_sha.lower() != expected_sha:
-                return False, f"SHA-256 mismatch for {source_archive}: expected {expected_sha}, got {actual_sha}"
+                return ProvenanceVerificationResult(
+                    status=PROVENANCE_STATUS_FAILED,
+                    is_valid_metadata=True,
+                    is_checksum_verified=False,
+                    source_archive=archive_name,
+                    message=f"SHA-256 mismatch for {archive_name}: expected {expected_sha}, got {actual_sha}",
+                )
+            return ProvenanceVerificationResult(
+                status=PROVENANCE_STATUS_CHECKSUM_VERIFIED,
+                is_valid_metadata=True,
+                is_checksum_verified=True,
+                source_archive=archive_name,
+                message=f"Checksum verified: {archive_name} (SHA-256 matches {expected_sha[:16]}...)",
+            )
         else:
-            return True, f"Verified metadata; source file uncached on disk ({source_archive})"
+            return ProvenanceVerificationResult(
+                status=PROVENANCE_STATUS_METADATA_ONLY,
+                is_valid_metadata=True,
+                is_checksum_verified=False,
+                source_archive=archive_name,
+                message=f"Metadata valid, source archive unavailable locally ({archive_name})",
+            )
 
-    return True, f"Verified scan record: {record.get('source_archive')} ({rec_count:,} records, 0 errors)"
+    return ProvenanceVerificationResult(
+        status=PROVENANCE_STATUS_METADATA_ONLY,
+        is_valid_metadata=True,
+        is_checksum_verified=False,
+        source_archive=archive_name,
+        message=f"Metadata validated for {archive_name} ({rec_count:,} records, 0 errors; file check skipped)",
+    )
 

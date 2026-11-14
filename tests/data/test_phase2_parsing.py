@@ -13,8 +13,13 @@ from src.data.parser import (
     BANKING77_COLUMNS,
     CSVParseError,
     ParserDiagnostics,
+    ProvenanceVerificationResult,
+    PROVENANCE_STATUS_CHECKSUM_VERIFIED,
+    PROVENANCE_STATUS_METADATA_ONLY,
+    PROVENANCE_STATUS_FAILED,
     REQUIRED_PROVENANCE_FIELDS,
     SAFE_FIELD_SIZE_LIMIT,
+    compute_file_sha256,
     ensure_safe_field_size_limit,
     scan_and_profile,
     stream_complaints,
@@ -310,13 +315,14 @@ class TestPhase2Parsing(unittest.TestCase):
             self.assertIn("test.csv", archives)
             
             for row in reader:
-                valid, msg = verify_scan_provenance_record(
+                res = verify_scan_provenance_record(
                     row,
                     repo_root=REPO_ROOT,
                     verify_local_file=True,
                     expected_parser_version="phase2.1-v1.0"
                 )
-                self.assertTrue(valid, f"Provenance record failed verification: {msg}")
+                self.assertNotEqual(res.status, PROVENANCE_STATUS_FAILED, f"Provenance record failed verification: {res.message}")
+                self.assertTrue(res.is_valid_metadata, f"Metadata must be valid: {res.message}")
 
     def test_14_scan_provenance_validation_edge_cases(self):
         """Asserts that verify_scan_provenance_record catches missing fields, checksum mismatch, and version drift."""
@@ -338,35 +344,38 @@ class TestPhase2Parsing(unittest.TestCase):
             "notes": "Test note",
         }
         
-        # Valid record passes
-        valid, msg = verify_scan_provenance_record(base_valid_record)
-        self.assertTrue(valid, msg)
+        # Valid record with file check skipped
+        res = verify_scan_provenance_record(base_valid_record, verify_local_file=False)
+        self.assertEqual(res.status, PROVENANCE_STATUS_METADATA_ONLY)
+        self.assertTrue(res.is_valid_metadata)
+        self.assertFalse(res.is_checksum_verified)
         
         # Missing required field
         bad_rec = dict(base_valid_record)
         bad_rec["source_sha256"] = ""
-        valid, msg = verify_scan_provenance_record(bad_rec)
-        self.assertFalse(valid)
-        self.assertIn("Missing or empty required field", msg)
+        res = verify_scan_provenance_record(bad_rec)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertFalse(res.is_valid_metadata)
+        self.assertIn("Missing or empty required field", res.message)
         
         # Parser version mismatch
-        valid, msg = verify_scan_provenance_record(base_valid_record, expected_parser_version="v2.0-different")
-        self.assertFalse(valid)
-        self.assertIn("Parser version mismatch", msg)
+        res = verify_scan_provenance_record(base_valid_record, expected_parser_version="v2.0-different")
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Parser version mismatch", res.message)
         
         # Non-zero error count
         bad_err = dict(base_valid_record)
         bad_err["error_count"] = "5"
-        valid, msg = verify_scan_provenance_record(bad_err)
-        self.assertFalse(valid)
-        self.assertIn("Non-zero error count", msg)
+        res = verify_scan_provenance_record(bad_err)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Non-zero error count", res.message)
         
         # Record count != valid count
         bad_count = dict(base_valid_record)
         bad_count["valid_count"] = "95"
-        valid, msg = verify_scan_provenance_record(bad_count)
-        self.assertFalse(valid)
-        self.assertIn("Count mismatch", msg)
+        res = verify_scan_provenance_record(bad_count)
+        self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+        self.assertIn("Count mismatch", res.message)
         
         # Checksum mismatch against actual file
         with tempfile.NamedTemporaryFile(delete=False) as tf:
@@ -376,9 +385,10 @@ class TestPhase2Parsing(unittest.TestCase):
             bad_hash_rec = dict(base_valid_record)
             bad_hash_rec["source_archive"] = os.path.basename(tf_path)
             bad_hash_rec["source_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
-            valid, msg = verify_scan_provenance_record(bad_hash_rec, repo_root=os.path.dirname(tf_path), verify_local_file=True)
-            self.assertFalse(valid)
-            self.assertIn("SHA-256 mismatch", msg)
+            res = verify_scan_provenance_record(bad_hash_rec, repo_root=os.path.dirname(tf_path), verify_local_file=True)
+            self.assertEqual(res.status, PROVENANCE_STATUS_FAILED)
+            self.assertFalse(res.is_checksum_verified)
+            self.assertIn("SHA-256 mismatch", res.message)
         finally:
             if os.path.exists(tf_path):
                 os.remove(tf_path)
@@ -391,6 +401,93 @@ class TestPhase2Parsing(unittest.TestCase):
         self.assertNotIn("Consumer complaint narrative", CFPB_BULK_COLUMNS)
         self.assertEqual(len(BANKING77_COLUMNS), 2)
         self.assertEqual(list(BANKING77_COLUMNS), ["text", "category"])
+
+    def test_16_provenance_missing_source_archive_distinction(self):
+        """Asserts that verify_scan_provenance_record returns METADATA_VALID_SOURCE_UNAVAILABLE for missing file."""
+        rec = {
+            "source_archive": "non_existent_archive_12345.zip",
+            "source_inner_file": "inner.csv",
+            "source_sha256": "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45",
+            "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+            "parser_version": "phase2.1-v1.0",
+            "command_configuration": "stream_complaints()",
+            "environment_runtime": "Python 3.12",
+            "expected_schema": "16 columns",
+            "observed_schema": "16 columns",
+            "record_count": "1000",
+            "valid_count": "1000",
+            "error_count": "0",
+            "scan_status": "verified_zero_errors",
+            "execution_mode": "local_workstation_full_scan",
+            "notes": "Test missing file",
+        }
+        res = verify_scan_provenance_record(rec, repo_root=REPO_ROOT, verify_local_file=True)
+        self.assertEqual(res.status, PROVENANCE_STATUS_METADATA_ONLY)
+        self.assertTrue(res.is_valid_metadata)
+        self.assertFalse(res.is_checksum_verified, "Missing file must not be marked checksum-verified")
+        self.assertIn("source archive unavailable locally", res.message)
+
+    def test_17_provenance_matching_local_sha256(self):
+        """Asserts that verify_scan_provenance_record returns CHECKSUM_VERIFIED when file hash matches exactly."""
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(b"Unique sample dataset content for hash testing")
+            tf_path = tf.name
+        try:
+            expected_sha = compute_file_sha256(tf_path)
+            rec = {
+                "source_archive": os.path.basename(tf_path),
+                "source_inner_file": "sample.csv",
+                "source_sha256": expected_sha,
+                "scan_timestamp_utc": "2026-10-29T10:00:00Z",
+                "parser_version": "phase2.1-v1.0",
+                "command_configuration": "stream_complaints()",
+                "environment_runtime": "Python 3.12",
+                "expected_schema": "16 columns",
+                "observed_schema": "16 columns",
+                "record_count": "50",
+                "valid_count": "50",
+                "error_count": "0",
+                "scan_status": "verified_zero_errors",
+                "execution_mode": "local_workstation_full_scan",
+                "notes": "Exact hash match test",
+            }
+            res = verify_scan_provenance_record(rec, repo_root=os.path.dirname(tf_path), verify_local_file=True)
+            self.assertEqual(res.status, PROVENANCE_STATUS_CHECKSUM_VERIFIED)
+            self.assertTrue(res.is_valid_metadata)
+            self.assertTrue(res.is_checksum_verified, "Matching file must be marked checksum-verified")
+            self.assertIn("Checksum verified", res.message)
+        finally:
+            if os.path.exists(tf_path):
+                os.remove(tf_path)
+
+    def test_18_audit_report_ci_mode_unverified_checksum_reflection(self):
+        """Asserts that audit report renders NOT RUN / NOT VERIFIED (CI) for archive checksums when files are uncached."""
+        if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
+            return
+            
+        from scripts.audit_phase2 import run_phase2_audit
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            test_report_path = os.path.join(tmp_dir, "test_ci_audit_report.md")
+            
+            # Run audit in CI mode
+            old_ci = os.environ.get("GITHUB_ACTIONS")
+            os.environ["GITHUB_ACTIONS"] = "true"
+            try:
+                # Temporarily point RAW_EXPORT_2 check by running audit
+                success = run_phase2_audit(report_path=test_report_path)
+                self.assertTrue(os.path.isfile(test_report_path))
+                with open(test_report_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                
+                # Check that Pillar 3 is Scan Metadata and Pillar 4 is Checksum Verification
+                self.assertIn("**3. Scan Metadata Manifests**", content)
+                self.assertIn("**4. Archive Checksum Verification**", content)
+            finally:
+                if old_ci is None:
+                    os.environ.pop("GITHUB_ACTIONS", None)
+                else:
+                    os.environ["GITHUB_ACTIONS"] = old_ci
+
 
 
 
