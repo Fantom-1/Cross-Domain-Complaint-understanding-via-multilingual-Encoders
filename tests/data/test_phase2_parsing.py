@@ -513,23 +513,52 @@ class TestPhase2Parsing(unittest.TestCase):
         self.assertIn("Parser version mismatch", res.message)
 
     def test_20_manifest_cardinality_and_reconciliation_failure(self):
-        """Asserts that audit fails when manifest has incomplete cardinality or mismatched checksums."""
+        """Asserts that audit fails when manifest has invalid cardinality, checksum/count mismatch, or duplicate keys."""
         if os.environ.get("PHASE2_AUDIT_RUNNING") == "1":
             return
         from scripts.audit_phase2 import run_phase2_audit, FULL_SCAN_PROVENANCE_CSV
         import shutil
         with tempfile.TemporaryDirectory() as tmp_dir:
-            test_report = os.path.join(tmp_dir, "report.md")
             temp_prov = os.path.join(tmp_dir, "temp_prov.csv")
             shutil.copyfile(FULL_SCAN_PROVENANCE_CSV, temp_prov)
             
+            with open(temp_prov, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                fieldnames = reader.fieldnames
+                original_rows = list(reader)
+
+            def write_mutated(rows):
+                with open(FULL_SCAN_PROVENANCE_CSV, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+            
             try:
-                # Truncate full_scan_provenance.csv to header only (cardinality 0 != 4)
-                with open(FULL_SCAN_PROVENANCE_CSV, "w", encoding="utf-8") as f:
-                    f.write("source_archive,source_inner_file,source_sha256,scan_timestamp_utc,parser_version,command_configuration,environment_runtime,expected_schema,observed_schema,record_count,valid_count,error_count,scan_status,execution_mode,notes\n")
-                    
-                passed = run_phase2_audit(report_path=test_report)
+                # 1. Truncate full_scan_provenance.csv to header only (cardinality 0 != 4)
+                write_mutated([])
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_cardinality.md"))
                 self.assertFalse(passed, "Audit must fail when full_scan_provenance.csv has invalid cardinality (< 4)")
+
+                # 2. Mutate SHA-256 checksum in first record
+                mutated_checksum = [dict(r) for r in original_rows]
+                mutated_checksum[0]["source_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"
+                write_mutated(mutated_checksum)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_checksum.md"))
+                self.assertFalse(passed, "Audit must fail when provenance checksum does not reconcile with sentinel")
+
+                # 3. Mutate record count in first record
+                mutated_count = [dict(r) for r in original_rows]
+                mutated_count[0]["record_count"] = "99999999"
+                write_mutated(mutated_count)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_count.md"))
+                self.assertFalse(passed, "Audit must fail when provenance record count does not reconcile with sentinel")
+
+                # 4. Duplicate inner file key
+                duplicate_key_rows = [dict(r) for r in original_rows]
+                duplicate_key_rows.append(dict(duplicate_key_rows[0]))
+                write_mutated(duplicate_key_rows)
+                passed = run_phase2_audit(report_path=os.path.join(tmp_dir, "report_duplicate.md"))
+                self.assertFalse(passed, "Audit must fail when duplicate inner file keys exist in manifest")
             finally:
                 shutil.copyfile(temp_prov, FULL_SCAN_PROVENANCE_CSV)
 
@@ -552,6 +581,51 @@ class TestPhase2Parsing(unittest.TestCase):
             with self.assertRaises(ValueError) as ctx:
                 build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
             self.assertIn("Source archive ineligible for canonical dataset building", str(ctx.exception))
+
+    def test_22_canonical_builder_rejects_malformed_rows_after_valid_rows(self):
+        """Asserts that build_canonical_dataset fails when malformed short/overflow rows follow valid rows."""
+        from src.data.build_canonical import build_canonical_dataset
+        import zipfile
+
+        # Subcase A: Malformed short row (3 columns) following a valid row
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_short_row.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,"
+                    "Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2019-01-01,Credit card,General,Billing,Late fee,"
+                    "This is a valid complaint narrative with more than twenty words to satisfy the minimum length filter required by preflight.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1001\n"
+                    "2019-01-02,Credit card,Truncated line with only three columns\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("malformed rows ineligible for canonical dataset building", str(ctx.exception))
+
+        # Subcase B: Malformed overflow row (18 columns) following a valid row
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_zip = os.path.join(tmp_dir, "complaints_overflow_row.zip")
+            with zipfile.ZipFile(mock_zip, "w") as z:
+                csv_content = (
+                    "Date received,Product,Sub-product,Issue,Sub-issue,Consumer complaint narrative,"
+                    "Company public response,Company,State,ZIP code,Tags,Submitted via,Date sent to company,"
+                    "Company response to consumer,Timely response?,Complaint ID\n"
+                    "2019-01-01,Credit card,General,Billing,Late fee,"
+                    "This is a valid complaint narrative with more than twenty words to satisfy the minimum length filter required by preflight.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1001\n"
+                    "2019-01-02,Credit card,General,Billing,Late fee,"
+                    "Narrative text here that is long enough to pass length filter requirements.,"
+                    "Response text,Acme Bank,CA,90210,,Web,2019-01-02,Closed,Yes,1002,extra1,extra2\n"
+                )
+                z.writestr("complaints.csv", csv_content)
+
+            with self.assertRaises(ValueError) as ctx:
+                build_canonical_dataset(zip_path=mock_zip, max_scan_rows=10)
+            self.assertIn("malformed rows ineligible for canonical dataset building", str(ctx.exception))
 
 
 

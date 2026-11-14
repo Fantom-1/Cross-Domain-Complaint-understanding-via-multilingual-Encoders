@@ -104,6 +104,12 @@ def build_canonical_dataset(
     )
 
     for row in stream:
+        if diag.error_rows > 0:
+            first_err = diag.errors[0]
+            raise ValueError(
+                f"Source archive contains malformed rows ineligible for canonical dataset building: {diag.error_rows} error row(s) detected. "
+                f"First error at line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})."
+            )
         total_scanned += 1
         if max_scan_rows and total_scanned > max_scan_rows:
             break
@@ -149,18 +155,21 @@ def build_canonical_dataset(
                 flush=True
             )
 
-    # Schema preflight validation:
-    # If stream_complaints logged a schema mismatch (e.g. 15-column active bulk feed without narratives),
-    # reject immediately rather than silently scanning and treating all rows as missing narratives.
+    # Schema and row integrity preflight validation:
+    # Reject immediately if any schema mismatch or row-level parse errors occurred.
+    # For this frozen baseline build, malformed rows must not be silently omitted or dropped.
     schema_errors = [e for e in diag.errors if e.error_type == "schema_mismatch"]
     if schema_errors:
         err_msg = schema_errors[0].error_details
         raise ValueError(
             f"Source archive ineligible for canonical dataset building: 16-column CFPB FOIA archive with narratives required. ({err_msg})"
         )
-    if diag.error_rows > 0 and total_scanned == 0:
+    if diag.error_rows > 0:
+        first_err = diag.errors[0] if diag.errors else None
+        err_detail = f"line {first_err.line_number} ({first_err.error_type}: {first_err.error_details})" if first_err else f"{diag.error_rows} error rows encountered"
         raise ValueError(
-            f"Source archive ineligible for canonical dataset building: failed parsing header or rows in {zip_path}."
+            f"Source archive contains malformed rows ineligible for canonical dataset building: {diag.error_rows} error row(s) detected. "
+            f"First error at {err_detail}."
         )
 
     exclusion_counts["missing_narrative"] = missing_narrative_count

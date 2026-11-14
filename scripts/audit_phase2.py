@@ -231,8 +231,23 @@ def _run_phase2_audit_internal(
                     log(f"Expected exactly {EXPECTED_SCAN_CARDINALITY} provenance records in full_scan_provenance.csv, found {len(prov_rows)}", "FAIL", pillar=3)
 
             # 3. Row-for-row reconciliation between parse_errors.csv sentinels and full_scan_provenance.csv
-            prov_by_file = {pr.get("source_inner_file"): pr for pr in prov_rows}
+            prov_by_file = {}
             reconciliation_failed = False
+            for pr in prov_rows:
+                key = pr.get("source_inner_file")
+                if key in prov_by_file:
+                    log(f"Duplicate inner file key detected in full_scan_provenance.csv: '{key}'", "FAIL", pillar=3)
+                    reconciliation_failed = True
+                prov_by_file[key] = pr
+
+            sentinel_by_file = {}
+            for r in rows:
+                fn = r.get("file_name")
+                if fn in sentinel_by_file:
+                    log(f"Duplicate sentinel file key detected in parse_errors.csv: '{fn}'", "FAIL", pillar=3)
+                    reconciliation_failed = True
+                sentinel_by_file[fn] = r
+
             for r in rows:
                 inner_f = r.get("file_name", "")
                 if inner_f not in prov_by_file:
