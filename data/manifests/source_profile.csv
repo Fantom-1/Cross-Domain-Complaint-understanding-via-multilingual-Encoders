@@ -1,0 +1,45 @@
+section,item_name,metric_1_name,metric_1_value,metric_2_name,metric_2_value,metric_3_name,metric_3_value,notes
+field_missingness,Date received,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Product,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Sub-product,null_count,64,non_null_count,1041568,null_rate_percent,0.01,FOIA 16-field reading room schema
+field_missingness,Issue,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Sub-issue,null_count,113098,non_null_count,928534,null_rate_percent,10.86,FOIA 16-field reading room schema
+field_missingness,Consumer complaint narrative,null_count,601772,non_null_count,439860,null_rate_percent,57.77,FOIA 16-field reading room schema
+field_missingness,Company public response,null_count,493215,non_null_count,548417,null_rate_percent,47.35,FOIA 16-field reading room schema
+field_missingness,Company,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,State,null_count,23472,non_null_count,1018160,null_rate_percent,2.25,FOIA 16-field reading room schema
+field_missingness,ZIP code,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Tags,null_count,922317,non_null_count,119315,null_rate_percent,88.55,FOIA 16-field reading room schema
+field_missingness,Submitted via,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Date sent to company,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Company response to consumer,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Timely response?,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+field_missingness,Complaint ID,null_count,0,non_null_count,1041632,null_rate_percent,0.0,FOIA 16-field reading room schema
+canonical_product_domain,credit_reporting,row_count,586714,share_of_total_percent,56.33,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,debt_collection,row_count,154699,share_of_total_percent,14.85,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,credit_card,row_count,86586,share_of_total_percent,8.31,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,mortgage,row_count,72510,share_of_total_percent,6.96,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,bank_account,row_count,69895,share_of_total_percent,6.71,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,money_transfer,row_count,21448,share_of_total_percent,2.06,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,vehicle_loan,row_count,18720,share_of_total_percent,1.8,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,student_loan,row_count,18456,share_of_total_percent,1.77,N/A,N/A,Standardized via configs/product_canonical.json
+canonical_product_domain,payday_personal_loan,row_count,12604,share_of_total_percent,1.21,N/A,N/A,Standardized via configs/product_canonical.json
+natural_class_distribution,reporting_incorrect_information,narrative_count,128540,population_share_percent,29.22,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,reporting_investigation_dispute,narrative_count,68225,population_share_percent,15.51,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,payment_problem,narrative_count,35804,population_share_percent,8.14,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,debt_not_owed,narrative_count,27170,population_share_percent,6.18,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,reporting_improper_use,narrative_count,24124,population_share_percent,5.48,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,debt_communication,narrative_count,22673,population_share_percent,5.15,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,fraud_or_scam,narrative_count,19728,population_share_percent,4.49,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,transaction_problem,narrative_count,18862,population_share_percent,4.29,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,debt_threats,narrative_count,18489,population_share_percent,4.2,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,account_management,narrative_count,16444,population_share_percent,3.74,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,credit_terms_dispute,narrative_count,14916,population_share_percent,3.39,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,servicing_dispute,narrative_count,13478,population_share_percent,3.06,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,application_problem,narrative_count,8961,population_share_percent,2.04,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,funds_availability,narrative_count,8737,population_share_percent,1.99,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,account_access,narrative_count,7758,population_share_percent,1.76,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,closing_process,narrative_count,3768,population_share_percent,0.86,N/A,N/A,Uncapped natural population distribution under weak rules
+natural_class_distribution,unmapped,narrative_count,2183,population_share_percent,0.5,N/A,N/A,Uncapped natural population distribution under weak rules
+length_percentiles,char_length,mean_std,1056.84 ± 1385.16,median_p50,675.0,p5_p95_range,"[118.0, 3189.0]","min=4, max=32394, p99=6513.41"
+length_percentiles,word_length,mean_std,189.33 ± 243.28,median_p50,122.0,p5_p95_range,"[21.0, 572.0]","min=1, max=6014, p99=1162.41"

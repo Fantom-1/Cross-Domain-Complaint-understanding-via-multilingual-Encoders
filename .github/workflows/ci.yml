@@ -2,7 +2,7 @@ name: CI Verification
 
 on:
   push:
-    branches: [ main, DATA_PREPARATION, phase2-1-corrective-hardening ]
+    branches: [ main, DATA_PREPARATION, phase3-profiling, feature/phase3-profiling ]
   pull_request:
     branches: [ main ]
 
@@ -38,3 +38,11 @@ jobs:
       - name: Run Phase 2 Audit
         run: |
           python scripts/audit_phase2.py
+
+      - name: Run Phase 3 Profiling Tests
+        run: |
+          python -m unittest tests/data/test_phase3_profiling.py
+
+      - name: Run Phase 3 Audit
+        run: |
+          python scripts/audit_phase3.py
