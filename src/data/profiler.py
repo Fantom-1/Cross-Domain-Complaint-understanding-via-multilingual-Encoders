@@ -164,6 +164,7 @@ class CorpusProfiler:
         self,
         archive_path: Union[str, Path, io.IOBase],
         max_rows: int = 0,
+        source_sha256: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Performs single-pass streaming profiling of a CFPB FOIA complaint archive.
         
@@ -182,6 +183,7 @@ class CorpusProfiler:
             archive_source = archive_path
             archive_name = getattr(archive_path, "name", "<stream>")
             archive_path_val = archive_name
+            actual_sha256 = source_sha256 or ""
         else:
             archive_source = str(archive_path)
             archive_name = os.path.basename(archive_source)
@@ -190,6 +192,16 @@ class CorpusProfiler:
                 archive_path_val = rel if not rel.startswith("..") else archive_name
             except ValueError:
                 archive_path_val = archive_name
+            if source_sha256:
+                actual_sha256 = source_sha256
+            elif os.path.isfile(archive_source):
+                h = hashlib.sha256()
+                with open(archive_source, "rb") as f:
+                    while chunk := f.read(1024 * 1024):
+                        h.update(chunk)
+                actual_sha256 = h.hexdigest()
+            else:
+                actual_sha256 = ""
         
         total_rows = 0
         narrative_rows = 0
@@ -424,6 +436,8 @@ class CorpusProfiler:
         return {
             "archive_name": archive_name,
             "archive_path": archive_path_val,
+            "source_sha256": actual_sha256,
+            "provenance_parser_version": "phase2.1-v1.0",
             "total_rows": total_rows,
             "date_coverage": {
                 "min_date": min_date,

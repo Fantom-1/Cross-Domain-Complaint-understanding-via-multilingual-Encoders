@@ -1,6 +1,6 @@
 # Phase 3 Audit Report: Full-Corpus Profiling
 
-- **Audit Execution Date:** 2026-11-14T19:31:27.632491+00:00
+- **Audit Execution Date:** 2026-11-14T19:46:37.606316+00:00
 - **Workspace:** `D:\NLP`
 - **Overall Verdict:** **PASSED**
 
@@ -10,10 +10,10 @@
 | :--- | :--- | :---: | :--- |
 | **1. Storage Preflight** | Disk space availability | PASS | 20.10 GB free on workspace drive (threshold: >= 15.0 GB) |
 | **2. Profiler Module** | Streaming profiler implementation | PASS | CorpusProfiler, percentile logic, and CSV exporter verified |
-| **3. Profile Manifests** | JSON & CSV profile schema integrity | PASS | 1,041,632 rows reconciled, 0 duplicate IDs, 9-column CSV, and provenance verified |
+| **3. Profile Manifests** | JSON & CSV profile schema integrity | PASS | 1,041,632 rows reconciled, 0 duplicate IDs, 9-column CSV, and mechanical provenance binding verified |
 | **4. Documentation** | Comprehensive empirical report | PASS | Full population, percentiles, duplicate templates, execution context, and deferrals documented |
 | **5. Empirical Smoke** | Synthetic / stream profiling test | PASS | Local raw archive present: 20-row release gate streaming verified |
-| **6. Unit Test Suites** | Regression coverage across Phases 0-3 | PASS | 57 tests executed (Phase 3 (16), Phase 2 (22), Phase 1 (9), Phase 0 (10)) with 0 failures |
+| **6. Unit Test Suites** | Regression coverage across Phases 0-3 | PASS | 58 tests executed (Phase 3 (17), Phase 2 (22), Phase 1 (9), Phase 0 (10)) with 0 failures |
 
 ## Detailed Execution Log
 
@@ -25,13 +25,16 @@
 [PASS ] src/data/profiler.py exists
 [PASS ] Successfully imported src.data.profiler symbols
 [PASS ] Verified percentile calculation logic
-[INFO ] --- Pillar 3: Profile Manifests Verification ---
-[PASS ] data/manifests/source_profile.json and source_profile.csv exist
-[PASS ] Verified population reconciliation: 1,041,632 total, 439,860 narratives, 601,772 missing
+[INFO ] --- Pillar 3: Profile Manifests Verification & Provenance Binding ---
+[PASS ] source_profile manifests exist
 [PASS ] Verified 0 duplicate Complaint IDs in population
 [PASS ] source_profile.json uses portable repo-relative path: data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip
 [PASS ] Exact 9-column CSV schema validated: ['section', 'item_name', 'metric_1_name', 'metric_1_value', 'metric_2_name', 'metric_2_value', 'metric_3_name', 'metric_3_value', 'notes']
-[PASS ] Verified provenance reconciliation: SHA-256=4b33ffc..., records=1,041,632, errors=0
+[PASS ] Verified mechanical provenance binding on source_sha256: 4b33ffc92fa02368...
+[PASS ] Verified mechanical provenance parser version binding: phase2.1-v1.0
+[PASS ] Verified mechanical row-count binding: total_rows (1,041,632) matches provenance record_count (1,041,632) and valid_count (1,041,632)
+[PASS ] Verified 0 errors in matched provenance record
+[PASS ] Verified narrative totals (439,860 + 601,772) exactly reconcile to provenance record_count (1,041,632)
 [INFO ] --- Pillar 4: Documentation Completeness & Analysis ---
 [PASS ] docs/profile_report.md exists
 [PASS ] profile_report.md documents population counts and narrative availability
@@ -44,6 +47,6 @@
 [PASS ] Local raw archive release-gate smoke streaming verified (20 rows scanned)
 [PASS ] Synthetic stream profiler smoke test: 2 mock rows processed cleanly
 [INFO ] --- Pillar 6: Unit Test Suite Execution ---
-[PASS ] Test suites PASSED (57 tests executed: Phase 3 (16), Phase 2 (22), Phase 1 (9), Phase 0 (10))
+[PASS ] Test suites PASSED (58 tests executed: Phase 3 (17), Phase 2 (22), Phase 1 (9), Phase 0 (10))
 [INFO ] OVERALL AUDIT VERDICT: **PASSED**
 ```

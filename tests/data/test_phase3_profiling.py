@@ -5,12 +5,14 @@ import io
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+from scripts.audit_phase3 import run_phase3_audit
 from src.data.parser import CFPB_BULK_COLUMNS, CFPB_FOIA_COLUMNS
 from src.data.profiler import CorpusProfiler
 
@@ -38,6 +40,9 @@ class TestPhase3Profiling(unittest.TestCase):
         self.assertTrue(os.path.isfile(PROFILE_CSV_PATH), f"Missing {PROFILE_CSV_PATH}")
         self.assertGreater(os.path.getsize(PROFILE_JSON_PATH), 1000)
         self.assertGreater(os.path.getsize(PROFILE_CSV_PATH), 500)
+        if self.has_profile:
+            self.assertEqual(self.profile.get("source_sha256"), "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45")
+            self.assertEqual(self.profile.get("provenance_parser_version"), "phase2.1-v1.0")
 
     def test_02_total_population_reconciliation(self):
         """Asserts exact row reconciliation across total scanned, narratives present, and missing."""
@@ -334,6 +339,60 @@ class TestPhase3Profiling(unittest.TestCase):
         result = profiler.profile_cfpb_foia_archive(buf, max_rows=5)
         self.assertEqual(result["total_rows"], 5, "Total rows must exactly equal max_rows=5")
         self.assertEqual(result["narrative_profile"]["total_rows"], 5)
+
+    def test_17_audit_provenance_binding_failure_injection(self):
+        """Asserts that mutating source_sha256 or row counts fails mechanical provenance binding in audit."""
+        if os.environ.get("PHASE3_AUDIT_RUNNING") == "1":
+            return
+        if not os.path.isfile(PROFILE_JSON_PATH):
+            self.skipTest("Profile JSON not available")
+
+        with open(PROFILE_JSON_PATH, "r", encoding="utf-8") as f:
+            base_profile = json.load(f)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Case A: Mutate source_sha256
+            mutated_sha_profile = dict(base_profile)
+            mutated_sha_profile["source_sha256"] = "deadbeef" * 8
+            sha_json_path = os.path.join(tmpdir, "mutated_sha.json")
+            sha_report_path = os.path.join(tmpdir, "audit_sha_fail.md")
+            with open(sha_json_path, "w", encoding="utf-8") as f:
+                json.dump(mutated_sha_profile, f)
+
+            result_sha = run_phase3_audit(report_path=sha_report_path, profile_json_path=sha_json_path, skip_unit_tests=True)
+            self.assertFalse(result_sha, "Audit must fail when source_sha256 does not match provenance")
+            with open(sha_report_path, "r", encoding="utf-8") as f:
+                report_text = f.read()
+            self.assertIn("Provenance binding mismatch on source_sha256", report_text)
+
+            # Case B: Mutate total_rows
+            mutated_rows_profile = dict(base_profile)
+            mutated_rows_profile["total_rows"] = 999999
+            rows_json_path = os.path.join(tmpdir, "mutated_rows.json")
+            rows_report_path = os.path.join(tmpdir, "audit_rows_fail.md")
+            with open(rows_json_path, "w", encoding="utf-8") as f:
+                json.dump(mutated_rows_profile, f)
+
+            result_rows = run_phase3_audit(report_path=rows_report_path, profile_json_path=rows_json_path, skip_unit_tests=True)
+            self.assertFalse(result_rows, "Audit must fail when total_rows does not match provenance record_count")
+            with open(rows_report_path, "r", encoding="utf-8") as f:
+                report_text = f.read()
+            self.assertIn("Provenance binding mismatch on total_rows", report_text)
+
+            # Case C: Mutate narrative counts so present + missing != total_rows
+            mutated_narr_profile = dict(base_profile)
+            mutated_narr_profile["narrative_profile"] = dict(base_profile["narrative_profile"])
+            mutated_narr_profile["narrative_profile"]["narratives_present"] = 100
+            narr_json_path = os.path.join(tmpdir, "mutated_narr.json")
+            narr_report_path = os.path.join(tmpdir, "audit_narr_fail.md")
+            with open(narr_json_path, "w", encoding="utf-8") as f:
+                json.dump(mutated_narr_profile, f)
+
+            result_narr = run_phase3_audit(report_path=narr_report_path, profile_json_path=narr_json_path, skip_unit_tests=True)
+            self.assertFalse(result_narr, "Audit must fail when narrative present + missing != provenance count")
+            with open(narr_report_path, "r", encoding="utf-8") as f:
+                report_text = f.read()
+            self.assertIn("does not reconcile to provenance record_count", report_text)
 
 
 if __name__ == "__main__":

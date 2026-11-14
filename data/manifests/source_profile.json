@@ -1,6 +1,8 @@
 {
   "archive_name": "CCDB_Export_2_May_2018_through_April_2021.zip",
   "archive_path": "data/raw/cfpb/CCDB_Export_2_May_2018_through_April_2021.zip",
+  "source_sha256": "4b33ffc92fa0236836228c5618b7247f0f59ffef35760a45175c858a0d5aaf45",
+  "provenance_parser_version": "phase2.1-v1.0",
   "total_rows": 1041632,
   "date_coverage": {
     "min_date": "2018-05-01",
