@@ -38,6 +38,7 @@ MANIFEST_DIR = os.path.join(REPO_ROOT, "data", "manifests")
 DOCS_DIR = os.path.join(REPO_ROOT, "docs")
 SRC_DIR = os.path.join(REPO_ROOT, "src", "data")
 PARSE_ERRORS_CSV = os.path.join(MANIFEST_DIR, "parse_errors.csv")
+FULL_SCAN_PROVENANCE_CSV = os.path.join(MANIFEST_DIR, "full_scan_provenance.csv")
 FIELD_SEMANTICS_DOC = os.path.join(DOCS_DIR, "field_semantics.md")
 SCHEMA_DIFF_DOC = os.path.join(DOCS_DIR, "schema_diff.md")
 AUDIT_REPORT_PATH = os.path.join(DOCS_DIR, "phase2_parsing_audit.md")
@@ -171,20 +172,23 @@ def _run_phase2_audit_internal(
     # -------------------------------------------------------------
     # Pillar 3: Parse Error Manifest Verification
     # -------------------------------------------------------------
-    log("--- Pillar 3: Parse Error Manifest Schema & Content Invariants ---")
-    if not os.path.isfile(PARSE_ERRORS_CSV):
-        log(f"Missing parse errors manifest: {PARSE_ERRORS_CSV}", "FAIL", pillar=3)
-        pillar_results[3]["notes"] = "Missing data/manifests/parse_errors.csv"
+    log("--- Pillar 3: Parse Error Manifest & Full-Scan Provenance Invariants ---")
+    if not os.path.isfile(PARSE_ERRORS_CSV) or not os.path.isfile(FULL_SCAN_PROVENANCE_CSV):
+        log(f"Missing manifests: {PARSE_ERRORS_CSV} or {FULL_SCAN_PROVENANCE_CSV}", "FAIL", pillar=3)
+        pillar_results[3]["notes"] = "Missing parse_errors.csv or full_scan_provenance.csv"
     else:
-        log("data/manifests/parse_errors.csv exists", "PASS", pillar=3)
+        log("data/manifests/parse_errors.csv and full_scan_provenance.csv exist", "PASS", pillar=3)
         try:
+            from src.data.parser import verify_scan_provenance_record, REQUIRED_PROVENANCE_FIELDS
+            
+            # 1. Check parse_errors.csv
             with open(PARSE_ERRORS_CSV, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 headers = list(reader.fieldnames or [])
                 if headers == REQUIRED_PARSE_ERROR_COLUMNS:
-                    log(f"Exact 7-column schema validated: {headers}", "PASS", pillar=3)
+                    log(f"Exact 7-column schema validated in parse_errors.csv: {headers}", "PASS", pillar=3)
                 else:
-                    log(f"Schema mismatch: expected {REQUIRED_PARSE_ERROR_COLUMNS}, got {headers}", "FAIL", pillar=3)
+                    log(f"Schema mismatch in parse_errors.csv: expected {REQUIRED_PARSE_ERROR_COLUMNS}, got {headers}", "FAIL", pillar=3)
                 
                 rows = list(reader)
                 if len(rows) >= 4:
@@ -192,27 +196,31 @@ def _run_phase2_audit_internal(
                 else:
                     log(f"Expected at least 4 verification rows, found {len(rows)}", "FAIL", pillar=3)
                     
-                all_zero_errors = True
-                has_provenance_metadata = True
                 for r in rows:
                     if r.get("error_type") != "verified_zero_errors":
-                        all_zero_errors = False
                         log(f"Unresolved parse error logged: {r}", "FAIL", pillar=3)
-                    details = r.get("error_details", "")
-                    if "SHA-256" not in details or "Local Full-Scan" not in details:
-                        has_provenance_metadata = False
-                
-                if all_zero_errors:
-                    log("All cataloged scans verified 0 parse errors (error_type = verified_zero_errors)", "PASS", pillar=3)
-                if has_provenance_metadata:
-                    log("Verified entries tie to exact source SHA-256 hashes and distinguish local scan from CI", "PASS", pillar=3)
+
+            # 2. Check full_scan_provenance.csv
+            with open(FULL_SCAN_PROVENANCE_CSV, "r", encoding="utf-8") as f:
+                prov_reader = csv.DictReader(f)
+                prov_headers = list(prov_reader.fieldnames or [])
+                if all(h in prov_headers for h in REQUIRED_PROVENANCE_FIELDS):
+                    log("full_scan_provenance.csv contains all required structured provenance fields", "PASS", pillar=3)
                 else:
-                    log("Parse error details missing source SHA-256 or scan provenance metadata", "FAIL", pillar=3)
+                    log(f"full_scan_provenance.csv missing fields: {set(REQUIRED_PROVENANCE_FIELDS) - set(prov_headers)}", "FAIL", pillar=3)
                 
-                if pillar_results[3]["result"] != "FAIL":
-                    pillar_results[3]["notes"] = f"Verified 0 errors across {len(rows)} datasets; checksum-anchored local scan metadata"
+                prov_rows = list(prov_reader)
+                for pr in prov_rows:
+                    valid, msg = verify_scan_provenance_record(pr, repo_root=REPO_ROOT, verify_local_file=True)
+                    if valid:
+                        log(f"Verified provenance record: {pr.get('source_archive')} ({msg})", "PASS", pillar=3)
+                    else:
+                        log(f"Provenance verification failed for {pr.get('source_archive')}: {msg}", "FAIL", pillar=3)
+
+            if pillar_results[3]["result"] != "FAIL":
+                pillar_results[3]["notes"] = f"Verified 0 errors across {len(rows)} datasets; structured provenance validated"
         except Exception as e:
-            log(f"Failed parsing parse_errors.csv: {e}", "FAIL", pillar=3)
+            log(f"Failed parsing manifests: {e}", "FAIL", pillar=3)
             pillar_results[3]["notes"] = f"Error reading manifest: {e}"
 
     # -------------------------------------------------------------
@@ -278,8 +286,8 @@ def _run_phase2_audit_internal(
             pillar_results[5]["notes"] = f"Smoke stream failed: {e}"
     else:
         log("RAW_EXPORT_2 not present locally (skipping empirical stream test; untracked in CI)", "INFO")
-        pillar_results[5]["result"] = "SKIPPED (CI)"
-        pillar_results[5]["notes"] = "Raw archive uncached (typical in CI; full scan verified on developer workstation)"
+        pillar_results[5]["result"] = "NOT RUN / SKIPPED (CI)"
+        pillar_results[5]["notes"] = "0 / 1 raw archives cached in CI (untracked in CI; full scan verified on developer workstation)"
 
     # -------------------------------------------------------------
     # Pillar 6: Unit Test Suite Execution
@@ -328,10 +336,12 @@ def _run_phase2_audit_internal(
         summary_table_rows.append(f"| **{k}. {p['title']}** | {p['focus']} | {p['result']} | {p['notes']} |")
     summary_table_str = "\n".join(summary_table_rows)
 
+    exec_env = "CI Runner (GitHub Actions ubuntu-latest)" if os.environ.get("GITHUB_ACTIONS") else f"Developer Workstation ({sys.platform})"
     report_content = f"""# Phase 2 Audit Report: Robust Parsing & Schema Diff
 
 - **Audit Execution Date:** {datetime.datetime.now(datetime.timezone.utc).isoformat()}
-- **Workspace:** `{REPO_ROOT}`
+- **Execution Environment:** {exec_env}
+- **Workspace Root:** `{REPO_ROOT}`
 - **Overall Verdict:** {verdict_badge}
 
 ## Audit Summary by Pillar

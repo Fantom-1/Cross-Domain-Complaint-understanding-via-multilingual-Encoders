@@ -1,7 +1,7 @@
 # Phase 1 Source Provenance & Release Manifest Audit Report
 
 **Audit Type:** Automated Gated Execution  
-**Execution Context:** Captured Local Snapshot (`2026-10-28 19:51:15Z`)  
+**Execution Context:** Captured Local Snapshot (`2026-11-14 18:22:50Z`)  
 **Workspace Root:** `D:\NLP`  
 **Overall Verdict:** **PASSED**  
 
@@ -11,18 +11,18 @@
 
 | Pillar | Inspection / Invariant Scope | Status | Details |
 | :--- | :--- | :---: | :--- |
-| **Storage & Preflight** | Workspace volume capacity >= 15 GB | PASS | 34.02 GB free |
+| **Storage & Preflight** | Workspace volume capacity >= 15 GB | PASS | 20.10 GB free |
 | **Required Deliverables** | Presence of manifests and governance docs | PASS | Manifests and docs verified |
 | **Inventory Manifest** | 20-column schema & 25 entries in `dataset_inventory.csv` | PASS | 25 entries, 0 errors |
 | **Overlap & Contiguity** | 15-column schema, 24 entries, strict 1-day contiguity, unmeasured designation across ALL 21 exports | PASS | 24 entries, 0 errors |
-| **Cryptographic Hashes** | SHA-256 verification of cached baseline archives | PASS | 5 files verified, 0 errors |
-| **Automated Test Suite** | Execution of `test_phase1_provenance` & `test_data_integrity` | PASS | 19 tests passed in test suite |
+| **Cryptographic Hashes** | SHA-256 verification of cached baseline archives | PASS | 5 / 5 files verified, 0 errors |
+| **Automated Test Suite** | Execution of test suites (Phase 1 (9), Phase 0 (10)) | PASS | 19 tests passed (Phase 1 (9), Phase 0 (10)) |
 
 ---
 
 ## 2. Invariant Checklist
 
-- [x] **Storage Buffer:** Sufficient workspace capacity verified (34.02 GB available).
+- [x] **Storage Buffer:** Sufficient workspace capacity verified (20.10 GB available).
 - [x] **Official Source Catalog:** Complete enumeration of all 21 CFPB FOIA narrative archive windows with aligned snapshot dates.
 - [x] **Observed vs Unverified Separation:** Empirical properties strictly separated from unverified remote fields across all 21 exports.
 - [x] **Immutable Baseline Integrity:** Cryptographic SHA-256 check matches `CCDB_Export_2` reference snapshot.
