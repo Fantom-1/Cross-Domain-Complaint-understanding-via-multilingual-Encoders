@@ -393,6 +393,69 @@ print(ids)
             if os.path.exists(rep_path):
                 os.remove(rep_path)
 
+    def test_18_audit_failure_injection_missing_physical_tokenizer_asset(self):
+        """Asserts audit fails when a required physical tokenizer asset is missing on disk."""
+        if os.environ.get("PHASE4_AUDIT_RUNNING") == "1":
+            return
+
+        with tempfile.TemporaryDirectory() as tmp_asset_dir:
+            # Create only config.json and sentencepiece.bpe.model, omit tokenizer.json
+            with open(os.path.join(tmp_asset_dir, "config.json"), "wb") as f:
+                f.write(b"mock config")
+            with open(os.path.join(tmp_asset_dir, "sentencepiece.bpe.model"), "wb") as f:
+                f.write(b"mock spm")
+
+            with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as rep_tmp:
+                rep_path = rep_tmp.name
+
+            try:
+                passed = run_phase4_audit(
+                    report_path=rep_path,
+                    tokenizer_assets_dir=tmp_asset_dir,
+                    skip_unit_tests=True,
+                )
+                self.assertFalse(passed, "Audit must FAIL when physical tokenizer asset is missing")
+            finally:
+                if os.path.exists(rep_path):
+                    os.remove(rep_path)
+
+    def test_19_audit_failure_injection_corrupted_physical_tokenizer_asset(self):
+        """Asserts audit fails when a physical tokenizer asset has bytes differing from expected digest."""
+        if os.environ.get("PHASE4_AUDIT_RUNNING") == "1":
+            return
+
+        with tempfile.TemporaryDirectory() as tmp_asset_dir:
+            # Create all 3 files, but with corrupt/invalid content
+            for fn in EXPECTED_TOKENIZER_ASSETS.keys():
+                with open(os.path.join(tmp_asset_dir, fn), "wb") as f:
+                    f.write(b"corrupted bytes payload")
+
+            with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as rep_tmp:
+                rep_path = rep_tmp.name
+
+            try:
+                passed = run_phase4_audit(
+                    report_path=rep_path,
+                    tokenizer_assets_dir=tmp_asset_dir,
+                    skip_unit_tests=True,
+                )
+                self.assertFalse(passed, "Audit must FAIL when physical tokenizer asset bytes differ from expected digest")
+            finally:
+                if os.path.exists(rep_path):
+                    os.remove(rep_path)
+
+    def test_20_profiler_fails_closed_on_corrupted_asset(self):
+        """Asserts TokenizationProfiler fails closed with RuntimeError when physical asset is corrupted."""
+        with tempfile.TemporaryDirectory() as tmp_asset_dir:
+            # Create corrupted asset files
+            for fn in EXPECTED_TOKENIZER_ASSETS.keys():
+                with open(os.path.join(tmp_asset_dir, fn), "wb") as f:
+                    f.write(b"corrupted byte stream")
+
+            profiler = TokenizationProfiler(mock=True)
+            with self.assertRaises(RuntimeError):
+                profiler._record_checkpoint_asset_hashes(search_dir=tmp_asset_dir)
+
 
 if __name__ == "__main__":
     unittest.main()

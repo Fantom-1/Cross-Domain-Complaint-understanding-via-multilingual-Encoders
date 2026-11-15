@@ -1,6 +1,6 @@
 # Automated Phase 4 Tokenization Profiling Audit Report
 
-**Generated:** 2026-11-15T11:56:33.472826+00:00  
+**Generated:** 2026-11-15T12:19:54.599143+00:00  
 **Execution Mode:** **Captured Local Workstation Snapshot** (Full Cryptographic Source-File & Checkpoint Verification)  
 **Repository Root:** `.` (Repo-Relative)  
 **Audit Target:** Phase 4 Subword Tokenization Profiling (`src/data/tokenization_profiler.py`, `data/manifests/tokenization_profile.json`, `data/manifests/tokenization_profile.csv`, `docs/tokenization_report.md`)  
@@ -49,54 +49,57 @@
 ## 3. Detailed Audit Execution Log
 
 ```
-11:56:01 [INFO ] Starting Pillar 1: Storage & Environment Preflight...
-11:56:01 [PASS ] Workspace disk space confirmed: 20.10 GB free.
-11:56:05 [PASS ] Tokenization profiler module imports cleanly.
-11:56:05 [INFO ] Starting Pillar 2: Dataset Provenance, Tokenizer Checkpoint & Asset Hashes...
-11:56:05 [PASS ] Source file hash independently checked locally: canonical_dataset.parquet verified (b591ba980a99ba82...).
-11:56:05 [PASS ] Source file hash independently checked locally: Banking77 train & test SHA-256 digests verified.
-11:56:05 [PASS ] Pinned tokenizer revision verified: 68c75dd7733d2640b3a98114e3e94196dc543fe1.
-11:56:05 [PASS ] Tokenizer asset 'config.json' hash verified (25ed3e0d067ca067...).
-11:56:05 [PASS ] Tokenizer asset 'sentencepiece.bpe.model' hash verified (dbee9f6b1c2cba29...).
-11:56:05 [PASS ] Tokenizer asset 'tokenizer.json' hash verified (43f949ef0c0b1ac1...).
-11:56:05 [PASS ] Manifest cryptographic binding to canonical dataset verified (b591ba980a99ba82...).
-11:56:05 [PASS ] Manifest cryptographic binding to Banking77 partitions verified.
-11:56:05 [INFO ] Starting Pillar 3: Profile Manifests Schema & Row-by-Row CSV Reconciliation...
-11:56:05 [PASS ] Loaded profile JSON from D:\NLP\data\manifests\tokenization_profile.json
-11:56:05 [PASS ] Verified production execution: mock_mode is False.
-11:56:05 [PASS ] Canonical splits perfectly reconcile to 45,723 instances.
-11:56:05 [PASS ] All 16 intent classes present and reconcile exactly to 45,723 instances.
-11:56:05 [PASS ] Banking77 train (10,003) and test (3,080) counts verified.
-11:56:05 [PASS ] Profile CSV schema verified (26 cols, 23 rows).
-11:56:05 [PASS ] All 23 rows in CSV reconciled row-by-row against JSON manifest within numeric tolerance.
-11:56:05 [INFO ] Starting Pillar 4: Truncation Analysis & Monotonic Percentile Invariants...
-11:56:05 [PASS ] Percentiles in normalized_overall are strictly monotonic.
-11:56:05 [PASS ] Truncation rates in normalized_overall are strictly monotonic across cutoffs.
-11:56:05 [PASS ] Percentiles in split_test are strictly monotonic.
-11:56:05 [PASS ] Truncation rates in split_test are strictly monotonic across cutoffs.
-11:56:05 [PASS ] Percentiles in split_train are strictly monotonic.
-11:56:05 [PASS ] Truncation rates in split_train are strictly monotonic across cutoffs.
-11:56:05 [PASS ] Percentiles in split_validation are strictly monotonic.
-11:56:05 [PASS ] Truncation rates in split_validation are strictly monotonic across cutoffs.
-11:56:05 [PASS ] Canonical 512-truncation rate verified: 15.96% (within [15.0%, 17.0%]).
-11:56:05 [PASS ] Banking77 128-token truncation is verified at 0.00% across train and test.
-11:56:05 [INFO ] Starting Pillar 5: Governance Disclaimers & Exact Headline Metric Reconciliation...
-11:56:05 [PASS ] Report includes CFPB Issue/Sub-issue weak administrative supervision notice.
-11:56:05 [PASS ] Report includes Banking77 auxiliary benchmark classification notice.
-11:56:05 [PASS ] Report includes Generalization boundary disclaimers.
-11:56:05 [PASS ] Report includes Explicit model checkpoint specification.
-11:56:05 [PASS ] Report includes Pinned tokenizer revision specification.
-11:56:05 [PASS ] Report includes Vocabulary size disclosure.
-11:56:05 [PASS ] Report exactly matches manifest for Content expansion ratio mean: 1.437
-11:56:05 [PASS ] Report exactly matches manifest for Content expansion ratio median: 1.350
-11:56:05 [PASS ] Report exactly matches manifest for Content expansion ratio p90: 1.810
-11:56:05 [PASS ] Report exactly matches manifest for Content expansion ratio maximum: 11.316
-11:56:05 [PASS ] Report exactly matches manifest for Sequence expansion ratio mean: 1.456
-11:56:05 [PASS ] Report exactly matches manifest for Sequence expansion ratio maximum: 11.351
-11:56:05 [PASS ] Report exactly matches manifest for 512-token truncation rate: 15.96%
-11:56:05 [PASS ] Report exactly matches manifest for 256-token truncation rate: 42.34%
-11:56:05 [PASS ] Report exactly matches manifest for 128-token truncation rate: 72.27%
-11:56:05 [PASS ] All headline metrics in documentation reconcile with machine-readable manifest.
-11:56:05 [INFO ] Starting Pillar 6: Unit Test Suite Execution...
-11:56:33 [PASS ] All unit tests passed (65 tests executed across Phases 1-4 with 0 failures).
+12:19:22 [INFO ] Starting Pillar 1: Storage & Environment Preflight...
+12:19:22 [PASS ] Workspace disk space confirmed: 20.10 GB free.
+12:19:26 [PASS ] Tokenization profiler module imports cleanly.
+12:19:26 [INFO ] Starting Pillar 2: Dataset Provenance, Tokenizer Checkpoint & Asset Hashes...
+12:19:27 [PASS ] Source file hash independently checked locally: canonical_dataset.parquet verified (b591ba980a99ba82...).
+12:19:27 [PASS ] Source file hash independently checked locally: Banking77 train & test SHA-256 digests verified.
+12:19:27 [PASS ] Physical tokenizer asset independently checked locally: 'config.json' SHA-256 verified (25ed3e0d067ca067...).
+12:19:27 [PASS ] Physical tokenizer asset independently checked locally: 'sentencepiece.bpe.model' SHA-256 verified (dbee9f6b1c2cba29...).
+12:19:27 [PASS ] Physical tokenizer asset independently checked locally: 'tokenizer.json' SHA-256 verified (43f949ef0c0b1ac1...).
+12:19:27 [PASS ] Manifest pinned tokenizer revision verified: 68c75dd7733d2640b3a98114e3e94196dc543fe1.
+12:19:27 [PASS ] Manifest cryptographic binding to tokenizer asset 'config.json' verified (25ed3e0d067ca067...).
+12:19:27 [PASS ] Manifest cryptographic binding to tokenizer asset 'sentencepiece.bpe.model' verified (dbee9f6b1c2cba29...).
+12:19:27 [PASS ] Manifest cryptographic binding to tokenizer asset 'tokenizer.json' verified (43f949ef0c0b1ac1...).
+12:19:27 [PASS ] Manifest cryptographic binding to canonical dataset verified (b591ba980a99ba82...).
+12:19:27 [PASS ] Manifest cryptographic binding to Banking77 partitions verified.
+12:19:27 [INFO ] Starting Pillar 3: Profile Manifests Schema & Row-by-Row CSV Reconciliation...
+12:19:27 [PASS ] Loaded profile JSON from data/manifests/tokenization_profile.json
+12:19:27 [PASS ] Verified production execution: mock_mode is False.
+12:19:27 [PASS ] Canonical splits perfectly reconcile to 45,723 instances.
+12:19:27 [PASS ] All 16 intent classes present and reconcile exactly to 45,723 instances.
+12:19:27 [PASS ] Banking77 train (10,003) and test (3,080) counts verified.
+12:19:27 [PASS ] Profile CSV schema verified (26 cols, 23 rows).
+12:19:27 [PASS ] All 23 rows in CSV reconciled row-by-row against JSON manifest within numeric tolerance.
+12:19:27 [INFO ] Starting Pillar 4: Truncation Analysis & Monotonic Percentile Invariants...
+12:19:27 [PASS ] Percentiles in normalized_overall are strictly monotonic.
+12:19:27 [PASS ] Truncation rates in normalized_overall are strictly monotonic across cutoffs.
+12:19:27 [PASS ] Percentiles in split_test are strictly monotonic.
+12:19:27 [PASS ] Truncation rates in split_test are strictly monotonic across cutoffs.
+12:19:27 [PASS ] Percentiles in split_train are strictly monotonic.
+12:19:27 [PASS ] Truncation rates in split_train are strictly monotonic across cutoffs.
+12:19:27 [PASS ] Percentiles in split_validation are strictly monotonic.
+12:19:27 [PASS ] Truncation rates in split_validation are strictly monotonic across cutoffs.
+12:19:27 [PASS ] Canonical 512-truncation rate verified: 15.96% (within [15.0%, 17.0%]).
+12:19:27 [PASS ] Banking77 128-token truncation is verified at 0.00% across train and test.
+12:19:27 [INFO ] Starting Pillar 5: Governance Disclaimers & Exact Headline Metric Reconciliation...
+12:19:27 [PASS ] Report includes CFPB Issue/Sub-issue weak administrative supervision notice.
+12:19:27 [PASS ] Report includes Banking77 auxiliary benchmark classification notice.
+12:19:27 [PASS ] Report includes Generalization boundary disclaimers.
+12:19:27 [PASS ] Report includes Explicit model checkpoint specification.
+12:19:27 [PASS ] Report includes Pinned tokenizer revision specification.
+12:19:27 [PASS ] Report includes Vocabulary size disclosure.
+12:19:27 [PASS ] Report exactly matches manifest for Content expansion ratio mean: 1.437
+12:19:27 [PASS ] Report exactly matches manifest for Content expansion ratio median: 1.350
+12:19:27 [PASS ] Report exactly matches manifest for Content expansion ratio p90: 1.810
+12:19:27 [PASS ] Report exactly matches manifest for Content expansion ratio maximum: 11.316
+12:19:27 [PASS ] Report exactly matches manifest for Sequence expansion ratio mean: 1.456
+12:19:27 [PASS ] Report exactly matches manifest for Sequence expansion ratio maximum: 11.351
+12:19:27 [PASS ] Report exactly matches manifest for 512-token truncation rate: 15.96%
+12:19:27 [PASS ] Report exactly matches manifest for 256-token truncation rate: 42.34%
+12:19:27 [PASS ] Report exactly matches manifest for 128-token truncation rate: 72.27%
+12:19:27 [PASS ] All headline metrics in documentation reconcile with machine-readable manifest.
+12:19:27 [INFO ] Starting Pillar 6: Unit Test Suite Execution...
+12:19:54 [PASS ] All unit tests passed (68 tests executed across Phases 1-4 with 0 failures).
 ```

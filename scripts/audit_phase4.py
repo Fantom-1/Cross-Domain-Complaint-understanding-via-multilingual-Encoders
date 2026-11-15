@@ -135,12 +135,28 @@ def compute_sha256(filepath: str) -> str:
     return h.hexdigest()
 
 
+def to_rel_path(path: str) -> str:
+    """Converts an absolute or relative path to a clean repo-relative POSIX path."""
+    if not path:
+        return ""
+    try:
+        norm_root = os.path.abspath(REPO_ROOT).replace("\\", "/").rstrip("/")
+        norm_path = os.path.abspath(path).replace("\\", "/")
+        if norm_path.startswith(norm_root):
+            rel = norm_path[len(norm_root):].lstrip("/")
+            return rel if rel else "."
+    except Exception:
+        pass
+    return os.path.basename(path).replace("\\", "/")
+
+
 def run_phase4_audit(
     report_path: Optional[str] = None,
     force_pillar_fail: Optional[int] = None,
     profile_json_path: Optional[str] = None,
     profile_csv_path: Optional[str] = None,
     skip_unit_tests: bool = False,
+    tokenizer_assets_dir: Optional[str] = None,
 ) -> bool:
     target_report_path = report_path or AUDIT_REPORT_PATH
     target_profile_json = profile_json_path or PROFILE_JSON
@@ -153,6 +169,7 @@ def run_phase4_audit(
             target_profile_json,
             target_profile_csv,
             skip_unit_tests,
+            tokenizer_assets_dir,
         )
     finally:
         os.environ.pop("PHASE4_AUDIT_RUNNING", None)
@@ -164,6 +181,7 @@ def _run_phase4_audit_internal(
     target_profile_json: str = PROFILE_JSON,
     target_profile_csv: str = PROFILE_CSV,
     skip_unit_tests: bool = False,
+    tokenizer_assets_dir: Optional[str] = None,
 ) -> bool:
     print("=" * 80)
     print("PHASE 4 AUDIT: SUBWORD TOKENIZATION PROFILING VERIFICATION")
@@ -212,7 +230,7 @@ def _run_phase4_audit_internal(
             log(f"Workspace disk space confirmed: {free_gb:.2f} GB free.", status="PASS", pillar=1)
 
         if not os.path.isfile(PROFILER_MODULE_PATH):
-            log(f"Missing tokenization profiler module: {PROFILER_MODULE_PATH}", status="FAIL", pillar=1)
+            log(f"Missing tokenization profiler module: {to_rel_path(PROFILER_MODULE_PATH)}", status="FAIL", pillar=1)
         else:
             try:
                 from src.data.tokenization_profiler import (
@@ -222,6 +240,7 @@ def _run_phase4_audit_internal(
                     TokenizationProfiler,
                     compute_percentiles,
                     compute_token_statistics,
+                    resolve_tokenizer_asset_path,
                 )
                 log("Tokenization profiler module imports cleanly.", status="PASS", pillar=1)
             except Exception as e:
@@ -235,7 +254,9 @@ def _run_phase4_audit_internal(
         log("Injected failure for Pillar 2", status="FAIL", pillar=2)
     else:
         # Check canonical dataset on disk if present (developer workstation snapshot)
+        is_workstation_mode = False
         if os.path.isfile(CANONICAL_PARQUET):
+            is_workstation_mode = True
             actual_canon_hash = compute_sha256(CANONICAL_PARQUET)
             if actual_canon_hash != EXPECTED_CANONICAL_SHA256:
                 log(f"Canonical dataset SHA-256 mismatch! Got {actual_canon_hash}, expected {EXPECTED_CANONICAL_SHA256}", status="FAIL", pillar=2)
@@ -257,6 +278,36 @@ def _run_phase4_audit_internal(
         else:
             log("Banking77 raw files untracked locally (hosted CI mode) - verifying cryptographic binding via manifest.", status="INFO", pillar=2)
 
+        # Independent verification of physical tokenizer asset files on disk
+        from src.data.tokenization_profiler import resolve_tokenizer_asset_path
+        search_dirs = [tokenizer_assets_dir] if tokenizer_assets_dir else None
+
+        for asset_name, exp_h in EXPECTED_TOKENIZER_ASSETS.items():
+            if tokenizer_assets_dir is not None:
+                asset_path = os.path.join(tokenizer_assets_dir, asset_name)
+                if not os.path.isfile(asset_path):
+                    log(f"Required physical tokenizer asset '{asset_name}' missing in {to_rel_path(tokenizer_assets_dir)}", status="FAIL", pillar=2)
+                    continue
+            else:
+                asset_path = resolve_tokenizer_asset_path(
+                    repo_id=EXPECTED_TOKENIZER_CHECKPOINT,
+                    filename=asset_name,
+                    revision=EXPECTED_TOKENIZER_REVISION,
+                    search_dirs=search_dirs,
+                )
+
+            if asset_path and os.path.isfile(asset_path):
+                act_physical_h = compute_sha256(asset_path)
+                if act_physical_h != exp_h:
+                    log(f"Physical tokenizer asset hash mismatch for '{asset_name}': got {act_physical_h}, expected {exp_h}", status="FAIL", pillar=2)
+                else:
+                    log(f"Physical tokenizer asset independently checked locally: '{asset_name}' SHA-256 verified ({exp_h[:16]}...).", status="PASS", pillar=2)
+            else:
+                if is_workstation_mode:
+                    log(f"Physical tokenizer asset '{asset_name}' could not be located in cache or disk for pinned revision {EXPECTED_TOKENIZER_REVISION}.", status="FAIL", pillar=2)
+                else:
+                    log(f"Physical tokenizer asset '{asset_name}' untracked locally (hosted CI mode) - verifying cryptographic binding via manifest.", status="INFO", pillar=2)
+
         # In both workstation and CI modes, assert that target profile manifest carries exact expected hashes and tokenizer revision
         if os.path.isfile(target_profile_json):
             try:
@@ -269,16 +320,16 @@ def _run_phase4_audit_internal(
                 if meta.get("tokenizer_revision") != EXPECTED_TOKENIZER_REVISION:
                     log(f"Manifest tokenizer revision mismatch: {meta.get('tokenizer_revision')} != {EXPECTED_TOKENIZER_REVISION}", status="FAIL", pillar=2)
                 else:
-                    log(f"Pinned tokenizer revision verified: {EXPECTED_TOKENIZER_REVISION}.", status="PASS", pillar=2)
+                    log(f"Manifest pinned tokenizer revision verified: {EXPECTED_TOKENIZER_REVISION}.", status="PASS", pillar=2)
 
-                # Check asset hashes
+                # Check asset hashes declared in manifest
                 asset_hashes = meta.get("tokenizer_asset_hashes", {})
                 for asset_name, exp_h in EXPECTED_TOKENIZER_ASSETS.items():
                     act_h = asset_hashes.get(asset_name)
                     if act_h != exp_h:
-                        log(f"Tokenizer asset hash mismatch for {asset_name}: got {act_h}, expected {exp_h}", status="FAIL", pillar=2)
+                        log(f"Manifest tokenizer asset binding mismatch for {asset_name}: got {act_h}, expected {exp_h}", status="FAIL", pillar=2)
                     else:
-                        log(f"Tokenizer asset '{asset_name}' hash verified ({exp_h[:16]}...).", status="PASS", pillar=2)
+                        log(f"Manifest cryptographic binding to tokenizer asset '{asset_name}' verified ({exp_h[:16]}...).", status="PASS", pillar=2)
 
                 # Check canonical source hash binding in manifest
                 manifest_canon_hash = p_bind.get("canonical_cfpb", {}).get("source_sha256")
@@ -298,7 +349,7 @@ def _run_phase4_audit_internal(
             except Exception as e:
                 log(f"Failed to read target profile manifest for provenance binding: {e}", status="FAIL", pillar=2)
         else:
-            log(f"Profile JSON not found for provenance binding: {target_profile_json}", status="FAIL", pillar=2)
+            log(f"Profile JSON not found for provenance binding: {to_rel_path(target_profile_json)}", status="FAIL", pillar=2)
 
     # -------------------------------------------------------------------------
     # Pillar 3: Profile Manifests Schema & Row-by-Row CSV Reconciliation
@@ -309,12 +360,12 @@ def _run_phase4_audit_internal(
         log("Injected failure for Pillar 3", status="FAIL", pillar=3)
     else:
         if not os.path.isfile(target_profile_json):
-            log(f"Profile JSON missing: {target_profile_json}", status="FAIL", pillar=3)
+            log(f"Profile JSON missing: {to_rel_path(target_profile_json)}", status="FAIL", pillar=3)
         else:
             try:
                 with open(target_profile_json, "r", encoding="utf-8") as f:
                     profile_data = json.load(f)
-                log(f"Loaded profile JSON from {target_profile_json}", status="PASS", pillar=3)
+                log(f"Loaded profile JSON from {to_rel_path(target_profile_json)}", status="PASS", pillar=3)
             except Exception as e:
                 log(f"Failed to parse profile JSON: {e}", status="FAIL", pillar=3)
 
@@ -378,7 +429,7 @@ def _run_phase4_audit_internal(
 
         # Finding 5: Row-by-Row Reconciliation between CSV and JSON
         if not os.path.isfile(target_profile_csv):
-            log(f"Profile CSV missing: {target_profile_csv}", status="FAIL", pillar=3)
+            log(f"Profile CSV missing: {to_rel_path(target_profile_csv)}", status="FAIL", pillar=3)
         else:
             with open(target_profile_csv, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
@@ -669,7 +720,7 @@ def _run_phase4_audit_internal(
 
     print("=" * 80)
     print(f"PHASE 4 AUDIT COMPLETE: OVERALL STATUS = {overall_status_str}")
-    print(f"Captured audit report written to: {target_report_path}")
+    print(f"Captured audit report written to: {to_rel_path(target_report_path)}")
     print("=" * 80)
 
     return overall_passed

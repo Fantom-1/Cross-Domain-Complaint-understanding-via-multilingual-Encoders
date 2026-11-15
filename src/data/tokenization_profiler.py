@@ -70,6 +70,70 @@ def compute_sha256(filepath: str) -> str:
     return h.hexdigest()
 
 
+def resolve_tokenizer_asset_path(
+    repo_id: str = DEFAULT_TOKENIZER_CHECKPOINT,
+    filename: str = "",
+    revision: str = DEFAULT_TOKENIZER_REVISION,
+    search_dirs: Optional[Sequence[str]] = None,
+) -> Optional[str]:
+    """Resolves local cached or stored file path for a tokenizer asset at a pinned revision.
+    
+    Resolution order:
+    1. Direct filesystem check inside search_dirs if provided.
+    2. Direct filesystem check if repo_id is a local directory or file path.
+    3. Hugging Face hub cache via try_to_load_from_cache.
+    4. Direct snapshot search in standard HF_HUB_CACHE snapshots.
+    5. Fallback via hf_hub_download.
+    """
+    if not filename:
+        return None
+
+    if search_dirs:
+        for sdir in search_dirs:
+            if sdir and os.path.isdir(sdir):
+                candidate = os.path.join(sdir, filename)
+                if os.path.isfile(candidate):
+                    return os.path.abspath(candidate)
+
+    if os.path.exists(repo_id):
+        if os.path.isdir(repo_id):
+            candidate = os.path.join(repo_id, filename)
+            if os.path.isfile(candidate):
+                return os.path.abspath(candidate)
+        elif os.path.isfile(repo_id) and os.path.basename(repo_id) == filename:
+            return os.path.abspath(repo_id)
+
+    # Try huggingface_hub try_to_load_from_cache
+    try:
+        from huggingface_hub import try_to_load_from_cache
+        cached = try_to_load_from_cache(repo_id, filename, revision=revision)
+        if cached and os.path.isfile(cached):
+            return os.path.abspath(cached)
+    except Exception:
+        pass
+
+    # Direct snapshot directory check in standard cache
+    try:
+        from huggingface_hub.constants import HF_HUB_CACHE
+        org_repo = repo_id.replace("/", "--")
+        candidate = os.path.join(HF_HUB_CACHE, f"models--{org_repo}", "snapshots", revision, filename)
+        if os.path.isfile(candidate):
+            return os.path.abspath(candidate)
+    except Exception:
+        pass
+
+    # Fallback to hf_hub_download
+    try:
+        from huggingface_hub import hf_hub_download
+        downloaded = hf_hub_download(repo_id=repo_id, filename=filename, revision=revision)
+        if downloaded and os.path.isfile(downloaded):
+            return os.path.abspath(downloaded)
+    except Exception:
+        pass
+
+    return None
+
+
 def compute_percentiles(values: Sequence[Union[int, float]], percentiles: Sequence[float] = DEFAULT_PERCENTILES) -> Dict[str, float]:
     """Computes exact percentiles from a sequence of numeric values using linear rank interpolation."""
     if not values:
@@ -250,6 +314,7 @@ class TokenizationProfiler:
         tokenizer: Optional[Any] = None,
         mock: bool = False,
         cutoffs: Sequence[int] = DEFAULT_CUTOFFS,
+        asset_search_dir: Optional[str] = None,
     ):
         self.tokenizer_name_or_path = tokenizer_name_or_path
         self.revision = revision
@@ -282,8 +347,8 @@ class TokenizationProfiler:
                 self.tokenizer_type = type(self.tokenizer).__name__
                 self.vocab_size = self.tokenizer.vocab_size
 
-                # Extract and record asset hashes from checkpoint cache
-                self._record_checkpoint_asset_hashes()
+                # Extract and record independently verified asset hashes from physical files on disk
+                self._record_checkpoint_asset_hashes(search_dir=asset_search_dir)
             except Exception as e:
                 raise RuntimeError(
                     f"Failed to load production tokenizer '{tokenizer_name_or_path}' at revision '{revision}': {e}. "
@@ -291,20 +356,37 @@ class TokenizationProfiler:
                     f"Pass mock=True explicitly only in unit tests."
                 ) from e
 
-    def _record_checkpoint_asset_hashes(self) -> None:
-        """Inspects tokenizer asset files in local cache and records SHA-256 hashes."""
-        vocab_files = getattr(self.tokenizer, "vocab_files_names", {}) or {}
-        for asset_key, filename in vocab_files.items():
-            if hasattr(self.tokenizer, "name_or_path"):
-                # If cached directory or file
-                candidate = os.path.join(self.tokenizer.name_or_path, filename)
-                if os.path.isfile(candidate):
-                    self.tokenizer_asset_hashes[filename] = compute_sha256(candidate)
+    def _record_checkpoint_asset_hashes(self, search_dir: Optional[str] = None) -> None:
+        """Resolves physical tokenizer assets on disk, computes their SHA-256 digests, and validates them."""
+        self.tokenizer_asset_hashes.clear()
+        search_dirs = []
+        if search_dir:
+            search_dirs.append(search_dir)
+        if hasattr(self.tokenizer, "name_or_path") and os.path.isdir(str(self.tokenizer.name_or_path)):
+            search_dirs.append(str(self.tokenizer.name_or_path))
 
-        # Also populate from expected pinned constants if verified
-        for fn, expected_h in EXPECTED_TOKENIZER_ASSETS.items():
-            if fn not in self.tokenizer_asset_hashes:
-                self.tokenizer_asset_hashes[fn] = expected_h
+        for filename, expected_hash in EXPECTED_TOKENIZER_ASSETS.items():
+            actual_path = resolve_tokenizer_asset_path(
+                repo_id=self.tokenizer_name_or_path,
+                filename=filename,
+                revision=self.revision,
+                search_dirs=search_dirs,
+            )
+            if not actual_path or not os.path.isfile(actual_path):
+                raise RuntimeError(
+                    f"Required physical tokenizer asset '{filename}' could not be located on disk "
+                    f"for checkpoint '{self.tokenizer_name_or_path}' at revision '{self.revision}'. "
+                    f"Production profiling fails closed."
+                )
+
+            computed_h = compute_sha256(actual_path)
+            if computed_h != expected_hash:
+                raise RuntimeError(
+                    f"Cryptographic hash mismatch for physical asset '{filename}' at '{actual_path}': "
+                    f"computed {computed_h} != expected {expected_hash}"
+                )
+
+            self.tokenizer_asset_hashes[filename] = computed_h
 
     def tokenize_batch(
         self,
