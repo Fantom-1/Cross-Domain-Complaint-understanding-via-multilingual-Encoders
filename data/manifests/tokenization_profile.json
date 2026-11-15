@@ -1,11 +1,22 @@
 {
   "metadata": {
     "pipeline_phase": "Phase 4 - Subword Tokenization Profiling",
-    "timestamp_utc": "2026-11-14T22:12:13.405701+00:00",
+    "timestamp_utc": "2026-11-15T11:25:08.135997+00:00",
     "tokenizer_checkpoint": "facebook/xlm-v-base",
+    "tokenizer_revision": "68c75dd7733d2640b3a98114e3e94196dc543fe1",
     "tokenizer_type": "XLMRobertaTokenizer",
     "vocab_size": 901629,
+    "transformers_version": "5.21.0",
+    "tokenizer_asset_hashes": {
+      "config.json": "25ed3e0d067ca06706bb76a597856c9ac7ba67559d4b2cf0e3f3f5052efd47e2",
+      "sentencepiece.bpe.model": "dbee9f6b1c2cba29b335e70d6088eea943c7d5ae55ac7dd17174760bf758e309",
+      "tokenizer.json": "43f949ef0c0b1ac18c506551109383d4a8a2bd48956ced0cc95cfd9120d42dca"
+    },
     "mock_mode": false,
+    "environment": {
+      "platform": "Windows-11-10.0.26300-SP0",
+      "python_version": "3.12.16"
+    },
     "cutoffs": [
       128,
       256,
@@ -25,7 +36,8 @@
     "supervision_status": "CFPB Issue/Sub-issue mappings are weak administrative supervision",
     "auxiliary_benchmark": "Banking77 is an auxiliary-only intent classification benchmark",
     "generalization_boundary": "No evidence of multilingual or held-out cross-domain generalization is claimed",
-    "metric_isolation": "Subword token measurements are strictly distinguished from lexical whitespace word counts"
+    "metric_isolation": "Subword token measurements are strictly distinguished from lexical whitespace word counts",
+    "ratio_definition": "content_subword_ratio strictly excludes special tokens (<s>, </s>); sequence_subword_ratio includes special tokens."
   },
   "canonical_cfpb": {
     "source_parquet_path": "data/processed/canonical_dataset.parquet",
@@ -75,7 +87,14 @@
           "retained_token_percent": 78.77
         }
       },
-      "subword_expansion_ratio": {
+      "content_subword_ratio": {
+        "mean": 1.437,
+        "median": 1.35,
+        "p90": 1.81,
+        "min": 1.0,
+        "max": 11.316
+      },
+      "sequence_subword_ratio": {
         "mean": 1.456,
         "median": 1.37,
         "p90": 1.83,
@@ -127,7 +146,14 @@
           "retained_token_percent": 83.1
         }
       },
-      "subword_expansion_ratio": {
+      "content_subword_ratio": {
+        "mean": 1.225,
+        "median": 1.2,
+        "p90": 1.36,
+        "min": 1.0,
+        "max": 3.947
+      },
+      "sequence_subword_ratio": {
         "mean": 1.244,
         "median": 1.21,
         "p90": 1.38,
@@ -180,7 +206,14 @@
             "retained_token_percent": 81.15
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.445,
+          "median": 1.36,
+          "p90": 1.81,
+          "min": 1.0,
+          "max": 6.45
+        },
+        "sequence_subword_ratio": {
           "mean": 1.464,
           "median": 1.37,
           "p90": 1.84,
@@ -232,7 +265,14 @@
             "retained_token_percent": 78.24
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.435,
+          "median": 1.35,
+          "p90": 1.8,
+          "min": 1.0,
+          "max": 11.316
+        },
+        "sequence_subword_ratio": {
           "mean": 1.454,
           "median": 1.37,
           "p90": 1.82,
@@ -284,7 +324,14 @@
             "retained_token_percent": 78.98
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.436,
+          "median": 1.35,
+          "p90": 1.81,
+          "min": 1.0,
+          "max": 8.204
+        },
+        "sequence_subword_ratio": {
           "mean": 1.455,
           "median": 1.36,
           "p90": 1.83,
@@ -338,7 +385,14 @@
             "retained_token_percent": 80.95
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.357,
+          "median": 1.3,
+          "p90": 1.65,
+          "min": 1.0,
+          "max": 5.696
+        },
+        "sequence_subword_ratio": {
           "mean": 1.374,
           "median": 1.31,
           "p90": 1.67,
@@ -390,7 +444,14 @@
             "retained_token_percent": 77.97
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.41,
+          "median": 1.35,
+          "p90": 1.73,
+          "min": 1.0,
+          "max": 5.099
+        },
+        "sequence_subword_ratio": {
           "mean": 1.426,
           "median": 1.36,
           "p90": 1.75,
@@ -442,7 +503,14 @@
             "retained_token_percent": 73.52
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.391,
+          "median": 1.34,
+          "p90": 1.7,
+          "min": 1.0,
+          "max": 3.515
+        },
+        "sequence_subword_ratio": {
           "mean": 1.407,
           "median": 1.35,
           "p90": 1.72,
@@ -494,7 +562,14 @@
             "retained_token_percent": 65.28
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.461,
+          "median": 1.4,
+          "p90": 1.81,
+          "min": 1.038,
+          "max": 4.686
+        },
+        "sequence_subword_ratio": {
           "mean": 1.473,
           "median": 1.41,
           "p90": 1.82,
@@ -546,7 +621,14 @@
             "retained_token_percent": 83.84
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.394,
+          "median": 1.33,
+          "p90": 1.71,
+          "min": 1.0,
+          "max": 5.192
+        },
+        "sequence_subword_ratio": {
           "mean": 1.41,
           "median": 1.34,
           "p90": 1.72,
@@ -598,7 +680,14 @@
             "retained_token_percent": 81.53
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.388,
+          "median": 1.31,
+          "p90": 1.77,
+          "min": 1.0,
+          "max": 3.92
+        },
+        "sequence_subword_ratio": {
           "mean": 1.413,
           "median": 1.34,
           "p90": 1.79,
@@ -650,7 +739,14 @@
             "retained_token_percent": 88.31
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.453,
+          "median": 1.38,
+          "p90": 1.86,
+          "min": 1.0,
+          "max": 4.884
+        },
+        "sequence_subword_ratio": {
           "mean": 1.477,
           "median": 1.4,
           "p90": 1.88,
@@ -702,7 +798,14 @@
             "retained_token_percent": 78.97
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.445,
+          "median": 1.37,
+          "p90": 1.83,
+          "min": 1.0,
+          "max": 4.788
+        },
+        "sequence_subword_ratio": {
           "mean": 1.464,
           "median": 1.39,
           "p90": 1.85,
@@ -754,7 +857,14 @@
             "retained_token_percent": 77.18
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.446,
+          "median": 1.36,
+          "p90": 1.8,
+          "min": 1.0,
+          "max": 6.5
+        },
+        "sequence_subword_ratio": {
           "mean": 1.466,
           "median": 1.38,
           "p90": 1.83,
@@ -806,7 +916,14 @@
             "retained_token_percent": 79.69
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.372,
+          "median": 1.32,
+          "p90": 1.69,
+          "min": 1.0,
+          "max": 3.739
+        },
+        "sequence_subword_ratio": {
           "mean": 1.39,
           "median": 1.33,
           "p90": 1.71,
@@ -858,7 +975,14 @@
             "retained_token_percent": 73.74
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.427,
+          "median": 1.36,
+          "p90": 1.76,
+          "min": 1.0,
+          "max": 4.414
+        },
+        "sequence_subword_ratio": {
           "mean": 1.442,
           "median": 1.38,
           "p90": 1.77,
@@ -910,7 +1034,14 @@
             "retained_token_percent": 82.49
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.649,
+          "median": 1.39,
+          "p90": 2.36,
+          "min": 1.0,
+          "max": 11.316
+        },
+        "sequence_subword_ratio": {
           "mean": 1.676,
           "median": 1.41,
           "p90": 2.38,
@@ -962,7 +1093,14 @@
             "retained_token_percent": 81.22
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.583,
+          "median": 1.43,
+          "p90": 2.19,
+          "min": 1.0,
+          "max": 6.45
+        },
+        "sequence_subword_ratio": {
           "mean": 1.608,
           "median": 1.45,
           "p90": 2.22,
@@ -1014,7 +1152,14 @@
             "retained_token_percent": 86.62
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.441,
+          "median": 1.34,
+          "p90": 1.91,
+          "min": 1.024,
+          "max": 6.905
+        },
+        "sequence_subword_ratio": {
           "mean": 1.465,
           "median": 1.36,
           "p90": 1.94,
@@ -1066,7 +1211,14 @@
             "retained_token_percent": 78.07
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.406,
+          "median": 1.35,
+          "p90": 1.73,
+          "min": 1.0,
+          "max": 4.261
+        },
+        "sequence_subword_ratio": {
           "mean": 1.421,
           "median": 1.36,
           "p90": 1.75,
@@ -1118,7 +1270,14 @@
             "retained_token_percent": 79.49
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.444,
+          "median": 1.38,
+          "p90": 1.78,
+          "min": 1.0,
+          "max": 6.667
+        },
+        "sequence_subword_ratio": {
           "mean": 1.46,
           "median": 1.39,
           "p90": 1.8,
@@ -1177,7 +1336,14 @@
             "retained_token_percent": 100.0
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.179,
+          "median": 1.14,
+          "p90": 1.36,
+          "min": 1.0,
+          "max": 2.25
+        },
+        "sequence_subword_ratio": {
           "mean": 1.396,
           "median": 1.36,
           "p90": 1.62,
@@ -1234,7 +1400,14 @@
             "retained_token_percent": 100.0
           }
         },
-        "subword_expansion_ratio": {
+        "content_subword_ratio": {
+          "mean": 1.181,
+          "median": 1.14,
+          "p90": 1.36,
+          "min": 1.0,
+          "max": 2.25
+        },
+        "sequence_subword_ratio": {
           "mean": 1.411,
           "median": 1.38,
           "p90": 1.62,

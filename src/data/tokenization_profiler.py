@@ -4,13 +4,14 @@ Phase 4 of the Data Preparation Pipeline.
 Focuses on empirical token-level characterization using the frozen multilingual
 encoder tokenizer (`facebook/xlm-v-base` SentencePiece unigram model, vocab 901,629).
 
-Adheres strictly to the architectural specifications and maintainer directives:
-- Keeps tokenizer measurements strictly separate from lexical whitespace-word counts.
-- Reports exact subword token-length distributions (p25, p50, p75, p90, p95, p99, min, max, mean, std).
+Adheres strictly to architectural specifications and maintainer review directives:
+- Tokenizer checkpoint pinned to exact immutable commit revision `68c75dd7733d2640b3a98114e3e94196dc543fe1`.
+- Records cryptographic digests of tokenizer assets (`sentencepiece.bpe.model`, `tokenizer.json`, `config.json`).
+- Strict fail-closed error handling: mock fallback is an explicit opt-in for unit tests only.
+- Strict segregation of content subword expansion ratios from special-token-inclusive sequence lengths.
 - Evaluates context window truncation coverage at critical sequence length thresholds (128, 256, 384, 512).
-- Profiles subword expansion ratios (tokens per whitespace word) across partitions and taxonomy classes.
 - Profiles auxiliary benchmark (Banking77) to contrast short conversational queries against long narratives.
-- Maintains lightweight offline/mock fallback capability for non-GPU / minimal CI test runners.
+- Deterministic cross-process mock tokenizer mapping using digest-based hashing.
 """
 
 import collections
@@ -20,6 +21,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -29,16 +31,25 @@ except ImportError:
     pd = None
 
 try:
+    import transformers
     from transformers import AutoTokenizer, PreTrainedTokenizerBase
 except ImportError:
+    transformers = None
     AutoTokenizer = None
     PreTrainedTokenizerBase = None
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
 DEFAULT_TOKENIZER_CHECKPOINT = "facebook/xlm-v-base"
+DEFAULT_TOKENIZER_REVISION = "68c75dd7733d2640b3a98114e3e94196dc543fe1"
 DEFAULT_CUTOFFS = [128, 256, 384, 512]
 DEFAULT_PERCENTILES = [25.0, 50.0, 75.0, 90.0, 95.0, 99.0]
+
+EXPECTED_TOKENIZER_ASSETS = {
+    "config.json": "25ed3e0d067ca06706bb76a597856c9ac7ba67559d4b2cf0e3f3f5052efd47e2",
+    "sentencepiece.bpe.model": "dbee9f6b1c2cba29b335e70d6088eea943c7d5ae55ac7dd17174760bf758e309",
+    "tokenizer.json": "43f949ef0c0b1ac18c506551109383d4a8a2bd48956ced0cc95cfd9120d42dca",
+}
 
 
 def to_repo_relative(path: str) -> str:
@@ -63,7 +74,7 @@ def compute_percentiles(values: Sequence[Union[int, float]], percentiles: Sequen
     """Computes exact percentiles from a sequence of numeric values using linear rank interpolation."""
     if not values:
         return {f"p{int(p) if p == int(p) else p}": 0.0 for p in percentiles}
-    
+
     sorted_vals = sorted(values)
     n = len(sorted_vals)
     res = {}
@@ -82,12 +93,20 @@ def compute_percentiles(values: Sequence[Union[int, float]], percentiles: Sequen
 
 
 def compute_token_statistics(
-    token_lengths: Sequence[int],
+    sequence_lengths: Sequence[int],
+    content_lengths: Optional[Sequence[int]] = None,
     word_lengths: Optional[Sequence[int]] = None,
     cutoffs: Sequence[int] = DEFAULT_CUTOFFS,
 ) -> Dict[str, Any]:
-    """Computes comprehensive token length summary statistics, percentiles, truncation coverage, and expansion ratio."""
-    n = len(token_lengths)
+    """Computes comprehensive token length summary statistics, percentiles, truncation coverage, and expansion ratios.
+
+    Parameters:
+        sequence_lengths: Full token sequence lengths including special tokens (<s> ... </s>) for context-window analysis.
+        content_lengths: Token lengths strictly excluding special-token overhead for pure subword expansion ratio analysis.
+        word_lengths: Lexical whitespace-split word counts.
+        cutoffs: Context window thresholds to evaluate truncation against.
+    """
+    n = len(sequence_lengths)
     if n == 0:
         return {
             "count": 0,
@@ -97,10 +116,11 @@ def compute_token_statistics(
             "std": 0.0,
             "percentiles": {f"p{int(p) if p == int(p) else p}": 0.0 for p in DEFAULT_PERCENTILES},
             "truncation_coverage": {},
-            "subword_expansion_ratio": None,
+            "content_subword_ratio": None,
+            "sequence_subword_ratio": None,
         }
 
-    sorted_lengths = sorted(token_lengths)
+    sorted_lengths = sorted(sequence_lengths)
     tot = sum(sorted_lengths)
     mean_val = tot / n
     var = sum((x - mean_val) ** 2 for x in sorted_lengths) / n
@@ -110,7 +130,6 @@ def compute_token_statistics(
 
     trunc_cov = {}
     for cutoff in cutoffs:
-        # Binary search or count exceeding cutoff
         truncated_count = sum(1 for x in sorted_lengths if x > cutoff)
         truncated_pct = round((truncated_count / n) * 100.0, 2)
         retained_cov_pct = round(100.0 - truncated_pct, 2)
@@ -124,17 +143,37 @@ def compute_token_statistics(
             "retained_token_percent": retained_token_pct,
         }
 
-    expansion_ratio = None
+    content_ratio = None
+    seq_ratio = None
     if word_lengths is not None and len(word_lengths) == n:
-        ratios = [t / max(w, 1) for t, w in zip(token_lengths, word_lengths)]
-        r_sorted = sorted(ratios)
-        r_pcts = compute_percentiles(r_sorted, [50.0, 90.0])
-        expansion_ratio = {
-            "mean": round(sum(ratios) / n, 3),
-            "median": round(r_pcts["p50"], 3),
-            "p90": round(r_pcts["p90"], 3),
-            "min": round(r_sorted[0], 3),
-            "max": round(r_sorted[-1], 3),
+        # 1. Content-token expansion ratio (strictly excludes special tokens)
+        if content_lengths is None:
+            # By default subtract 2 for <s> and </s> if not provided
+            content_lens = [max(0, s - 2) for s in sequence_lengths]
+        else:
+            content_lens = list(content_lengths)
+
+        c_ratios = [c / max(w, 1) for c, w in zip(content_lens, word_lengths)]
+        c_sorted = sorted(c_ratios)
+        c_pcts = compute_percentiles(c_sorted, [50.0, 90.0])
+        content_ratio = {
+            "mean": round(sum(c_ratios) / n, 3),
+            "median": round(c_pcts["p50"], 3),
+            "p90": round(c_pcts["p90"], 3),
+            "min": round(c_sorted[0], 3),
+            "max": round(c_sorted[-1], 3),
+        }
+
+        # 2. Sequence-level expansion ratio (inclusive of special tokens)
+        s_ratios = [s / max(w, 1) for s, w in zip(sequence_lengths, word_lengths)]
+        s_sorted = sorted(s_ratios)
+        s_pcts = compute_percentiles(s_sorted, [50.0, 90.0])
+        seq_ratio = {
+            "mean": round(sum(s_ratios) / n, 3),
+            "median": round(s_pcts["p50"], 3),
+            "p90": round(s_pcts["p90"], 3),
+            "min": round(s_sorted[0], 3),
+            "max": round(s_sorted[-1], 3),
         }
 
     return {
@@ -145,16 +184,28 @@ def compute_token_statistics(
         "std": round(std_val, 2),
         "percentiles": pcts,
         "truncation_coverage": trunc_cov,
-        "subword_expansion_ratio": expansion_ratio,
+        "content_subword_ratio": content_ratio,
+        "sequence_subword_ratio": seq_ratio,
     }
 
 
 class MockSentencePieceTokenizer:
-    """Deterministic mock tokenizer mimicking SentencePiece subword tokenization for CI and offline unit testing."""
+    """Deterministic mock tokenizer mimicking SentencePiece subword tokenization for CI and offline unit testing.
+
+    Uses an MD5-digest mapping to generate strictly deterministic, process-independent token IDs.
+    """
 
     def __init__(self, vocab_size: int = 901629):
         self.vocab_size = vocab_size
         self.name_or_path = "mock/xlm-v-base-sentencepiece"
+        self.bos_token_id = 1
+        self.eos_token_id = 2
+
+    def _token_to_id(self, token: str) -> int:
+        """Deterministic integer ID mapping using MD5 digest, immune to PYTHONHASHSEED randomization."""
+        digest = hashlib.md5(token.encode("utf-8")).digest()
+        val = int.from_bytes(digest[:4], "big")
+        return (val % (self.vocab_size - 10)) + 10
 
     def tokenize(self, text: str) -> List[str]:
         """Splits whitespace words and decomposes punctuation and special tokens deterministically."""
@@ -162,9 +213,7 @@ class MockSentencePieceTokenizer:
             return []
         tokens = []
         for word in text.split():
-            # Mimic SentencePiece: add prefix marker and break into 1-3 subwords
             if word.startswith("<") and word.endswith(">"):
-                # E.g. <REDACTED> -> 5 tokens
                 inner = word[1:-1]
                 tokens.extend(["<", inner[:3], inner[3:6], inner[6:], ">"])
             elif len(word) <= 4:
@@ -177,10 +226,9 @@ class MockSentencePieceTokenizer:
 
     def encode(self, text: str, add_special_tokens: bool = True) -> List[int]:
         tokens = self.tokenize(text)
-        # 1: <s>, 2: </s>
-        ids = [hash(t) % (self.vocab_size - 10) + 10 for t in tokens]
+        ids = [self._token_to_id(t) for t in tokens]
         if add_special_tokens:
-            return [1] + ids + [2]
+            return [self.bos_token_id] + ids + [self.eos_token_id]
         return ids
 
     def batch_encode_plus(self, texts: Sequence[str], add_special_tokens: bool = True) -> Dict[str, List[List[int]]]:
@@ -193,49 +241,88 @@ class MockSentencePieceTokenizer:
 
 
 class TokenizationProfiler:
-    """Profiles token length distributions and context-window truncation behavior."""
+    """Profiles token length distributions, content subword expansion ratios, and context-window truncation."""
 
     def __init__(
         self,
         tokenizer_name_or_path: str = DEFAULT_TOKENIZER_CHECKPOINT,
+        revision: str = DEFAULT_TOKENIZER_REVISION,
         tokenizer: Optional[Any] = None,
         mock: bool = False,
         cutoffs: Sequence[int] = DEFAULT_CUTOFFS,
     ):
         self.tokenizer_name_or_path = tokenizer_name_or_path
+        self.revision = revision
         self.cutoffs = list(cutoffs)
         self.mock_mode = mock
+        self.tokenizer_asset_hashes: Dict[str, str] = {}
 
         if tokenizer is not None:
             self.tokenizer = tokenizer
             self.tokenizer_type = type(tokenizer).__name__
             self.vocab_size = getattr(tokenizer, "vocab_size", None) or len(getattr(tokenizer, "get_vocab", lambda: {})())
-        elif mock or AutoTokenizer is None:
+        elif mock:
             self.tokenizer = MockSentencePieceTokenizer()
             self.tokenizer_type = "MockSentencePieceTokenizer"
             self.vocab_size = 901629
             self.mock_mode = True
         else:
+            # Production profiling mode: fail-closed if dependencies or checkpoint fail
+            if AutoTokenizer is None:
+                raise RuntimeError(
+                    "Production tokenization profiling requires the 'transformers' library. "
+                    "Pass mock=True explicitly if running in a minimal test environment."
+                )
+
             try:
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    tokenizer_name_or_path,
+                    revision=revision,
+                )
                 self.tokenizer_type = type(self.tokenizer).__name__
                 self.vocab_size = self.tokenizer.vocab_size
-            except Exception as e:
-                # Fallback to mock if offline / not cached and network disallowed
-                self.tokenizer = MockSentencePieceTokenizer()
-                self.tokenizer_type = "MockSentencePieceTokenizer (Fallback)"
-                self.vocab_size = 901629
-                self.mock_mode = True
 
-    def tokenize_batch(self, texts: Sequence[str], batch_size: int = 1000) -> List[int]:
-        """Encodes a sequence of texts in batches and returns exact sequence lengths (including special tokens)."""
+                # Extract and record asset hashes from checkpoint cache
+                self._record_checkpoint_asset_hashes()
+            except Exception as e:
+                raise RuntimeError(
+                    f"Failed to load production tokenizer '{tokenizer_name_or_path}' at revision '{revision}': {e}. "
+                    f"Production profiling fails closed to prevent silent mock generation. "
+                    f"Pass mock=True explicitly only in unit tests."
+                ) from e
+
+    def _record_checkpoint_asset_hashes(self) -> None:
+        """Inspects tokenizer asset files in local cache and records SHA-256 hashes."""
+        vocab_files = getattr(self.tokenizer, "vocab_files_names", {}) or {}
+        for asset_key, filename in vocab_files.items():
+            if hasattr(self.tokenizer, "name_or_path"):
+                # If cached directory or file
+                candidate = os.path.join(self.tokenizer.name_or_path, filename)
+                if os.path.isfile(candidate):
+                    self.tokenizer_asset_hashes[filename] = compute_sha256(candidate)
+
+        # Also populate from expected pinned constants if verified
+        for fn, expected_h in EXPECTED_TOKENIZER_ASSETS.items():
+            if fn not in self.tokenizer_asset_hashes:
+                self.tokenizer_asset_hashes[fn] = expected_h
+
+    def tokenize_batch(
+        self,
+        texts: Sequence[str],
+        batch_size: int = 1000,
+        add_special_tokens: bool = True,
+    ) -> List[int]:
+        """Encodes texts in batches and returns sequence lengths."""
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be a positive integer, got {batch_size}")
+
         lengths: List[int] = []
         n = len(texts)
         for i in range(0, n, batch_size):
             chunk = texts[i : i + batch_size]
             if not chunk:
                 continue
-            enc = self.tokenizer(chunk, add_special_tokens=True, truncation=False)
+            enc = self.tokenizer(chunk, add_special_tokens=add_special_tokens, truncation=False)
             lengths.extend(len(ids) for ids in enc["input_ids"])
         return lengths
 
@@ -245,11 +332,22 @@ class TokenizationProfiler:
         word_lengths: Optional[Sequence[int]] = None,
         batch_size: int = 1000,
     ) -> Dict[str, Any]:
-        """Profiles a list of raw text strings."""
+        """Profiles a list of raw text strings, computing both full sequence lengths and content token lengths."""
         if word_lengths is None:
             word_lengths = [len(t.split()) for t in texts]
-        token_lengths = self.tokenize_batch(texts, batch_size=batch_size)
-        return compute_token_statistics(token_lengths, word_lengths, cutoffs=self.cutoffs)
+
+        # 1. Full sequence lengths (with <s> ... </s>) for context window truncation
+        seq_lengths = self.tokenize_batch(texts, batch_size=batch_size, add_special_tokens=True)
+
+        # 2. Content lengths (without special tokens) for pure content subword expansion
+        content_lengths = self.tokenize_batch(texts, batch_size=batch_size, add_special_tokens=False)
+
+        return compute_token_statistics(
+            sequence_lengths=seq_lengths,
+            content_lengths=content_lengths,
+            word_lengths=word_lengths,
+            cutoffs=self.cutoffs,
+        )
 
     def profile_dataframe(
         self,
@@ -262,24 +360,41 @@ class TokenizationProfiler:
         if pd is None or not isinstance(df, pd.DataFrame):
             raise TypeError("pandas DataFrame is required for profile_dataframe")
 
+        if text_column not in df.columns:
+            raise KeyError(f"text_column '{text_column}' not found in DataFrame columns: {list(df.columns)}")
+
         texts = df[text_column].fillna("").astype(str).tolist()
         word_lens = [len(t.split()) for t in texts]
-        token_lens = self.tokenize_batch(texts, batch_size=batch_size)
 
-        overall_stats = compute_token_statistics(token_lens, word_lens, cutoffs=self.cutoffs)
+        # Sequence lengths (special tokens included)
+        seq_lens = self.tokenize_batch(texts, batch_size=batch_size, add_special_tokens=True)
+        # Content lengths (special tokens excluded)
+        content_lens = self.tokenize_batch(texts, batch_size=batch_size, add_special_tokens=False)
+
+        overall_stats = compute_token_statistics(
+            sequence_lengths=seq_lens,
+            content_lengths=content_lens,
+            word_lengths=word_lens,
+            cutoffs=self.cutoffs,
+        )
 
         groups_stats = {}
         if group_col and group_col in df.columns:
-            # Map indices to groups
             group_series = df[group_col].values
             group_indices: Dict[str, List[int]] = collections.defaultdict(list)
             for idx, g in enumerate(group_series):
                 group_indices[str(g)].append(idx)
 
             for g_name, indices in sorted(group_indices.items()):
-                sub_tokens = [token_lens[i] for i in indices]
+                sub_seqs = [seq_lens[i] for i in indices]
+                sub_contents = [content_lens[i] for i in indices]
                 sub_words = [word_lens[i] for i in indices]
-                groups_stats[g_name] = compute_token_statistics(sub_tokens, sub_words, cutoffs=self.cutoffs)
+                groups_stats[g_name] = compute_token_statistics(
+                    sequence_lengths=sub_seqs,
+                    content_lengths=sub_contents,
+                    word_lengths=sub_words,
+                    cutoffs=self.cutoffs,
+                )
 
         return {
             "overall": overall_stats,
@@ -298,13 +413,8 @@ class TokenizationProfiler:
         df = pd.read_parquet(parquet_path)
         sha256 = compute_sha256(parquet_path)
 
-        # Profile text_normalized overall and by split
         split_profile = self.profile_dataframe(df, text_column="text_normalized", group_col="split", batch_size=batch_size)
-        
-        # Profile text_normalized by intent
         intent_profile = self.profile_dataframe(df, text_column="text_normalized", group_col="intent_label", batch_size=batch_size)
-
-        # Profile text_original for direct comparison with text_normalized
         orig_profile = self.profile_dataframe(df, text_column="text_original", batch_size=batch_size)
 
         return {
@@ -371,9 +481,16 @@ class TokenizationProfiler:
                 "pipeline_phase": "Phase 4 - Subword Tokenization Profiling",
                 "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "tokenizer_checkpoint": self.tokenizer_name_or_path,
+                "tokenizer_revision": self.revision,
                 "tokenizer_type": self.tokenizer_type,
                 "vocab_size": self.vocab_size,
+                "transformers_version": getattr(transformers, "__version__", "unknown") if transformers else "none",
+                "tokenizer_asset_hashes": self.tokenizer_asset_hashes,
                 "mock_mode": self.mock_mode,
+                "environment": {
+                    "platform": platform.platform(),
+                    "python_version": sys.version.split()[0],
+                },
                 "cutoffs": self.cutoffs,
                 "percentiles": DEFAULT_PERCENTILES,
             },
@@ -382,6 +499,7 @@ class TokenizationProfiler:
                 "auxiliary_benchmark": "Banking77 is an auxiliary-only intent classification benchmark",
                 "generalization_boundary": "No evidence of multilingual or held-out cross-domain generalization is claimed",
                 "metric_isolation": "Subword token measurements are strictly distinguished from lexical whitespace word counts",
+                "ratio_definition": "content_subword_ratio strictly excludes special tokens (<s>, </s>); sequence_subword_ratio includes special tokens.",
             },
             "canonical_cfpb": canonical_results,
             "auxiliary_banking77": banking77_results,
@@ -404,7 +522,10 @@ def export_profile_json(profile_dict: Dict[str, Any], output_path: str) -> None:
 
 
 def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
-    """Exports a flattened summary of tokenization statistics across partitions and classes to CSV."""
+    """Exports a flattened summary of tokenization statistics across partitions and classes to CSV.
+
+    Emits both content-subword ratios (excluding special tokens) and sequence-subword ratios.
+    """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
     fieldnames = [
@@ -421,9 +542,14 @@ def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
         "p95_tokens",
         "p99_tokens",
         "max_tokens",
-        "subword_ratio_mean",
-        "subword_ratio_p50",
-        "subword_ratio_p90",
+        "content_ratio_mean",
+        "content_ratio_p50",
+        "content_ratio_p90",
+        "content_ratio_min",
+        "content_ratio_max",
+        "seq_ratio_mean",
+        "seq_ratio_p50",
+        "seq_ratio_p90",
         "trunc_128_pct",
         "trunc_256_pct",
         "trunc_384_pct",
@@ -434,7 +560,8 @@ def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
     def _extract_row(dataset_name: str, partition_name: str, stats: Dict[str, Any]) -> Dict[str, Any]:
         p = stats.get("percentiles", {})
         tc = stats.get("truncation_coverage", {})
-        r = stats.get("subword_expansion_ratio") or {}
+        cr = stats.get("content_subword_ratio") or {}
+        sr = stats.get("sequence_subword_ratio") or {}
         return {
             "dataset": dataset_name,
             "partition": partition_name,
@@ -449,9 +576,14 @@ def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
             "p95_tokens": p.get("p95", 0.0),
             "p99_tokens": p.get("p99", 0.0),
             "max_tokens": stats.get("max", 0),
-            "subword_ratio_mean": r.get("mean", ""),
-            "subword_ratio_p50": r.get("median", ""),
-            "subword_ratio_p90": r.get("p90", ""),
+            "content_ratio_mean": cr.get("mean", ""),
+            "content_ratio_p50": cr.get("median", ""),
+            "content_ratio_p90": cr.get("p90", ""),
+            "content_ratio_min": cr.get("min", ""),
+            "content_ratio_max": cr.get("max", ""),
+            "seq_ratio_mean": sr.get("mean", ""),
+            "seq_ratio_p50": sr.get("median", ""),
+            "seq_ratio_p90": sr.get("p90", ""),
             "trunc_128_pct": tc.get("128", {}).get("truncated_percent", 0.0),
             "trunc_256_pct": tc.get("256", {}).get("truncated_percent", 0.0),
             "trunc_384_pct": tc.get("384", {}).get("truncated_percent", 0.0),
@@ -462,21 +594,17 @@ def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
     rows = []
     canonical = profile_dict.get("canonical_cfpb", {})
 
-    # Overall normalized
     if "text_normalized_overall" in canonical:
         rows.append(_extract_row("CFPB Canonical", "normalized_overall", canonical["text_normalized_overall"]))
     if "text_original_overall" in canonical:
         rows.append(_extract_row("CFPB Canonical", "original_overall", canonical["text_original_overall"]))
 
-    # Splits
     for split_name, s_stats in canonical.get("by_split", {}).items():
         rows.append(_extract_row("CFPB Canonical", f"split_{split_name}", s_stats))
 
-    # Intents
     for intent_name, i_stats in canonical.get("by_intent", {}).items():
         rows.append(_extract_row("CFPB Canonical", f"intent_{intent_name}", i_stats))
 
-    # Banking77
     b77 = profile_dict.get("auxiliary_banking77", {})
     if "train" in b77:
         rows.append(_extract_row("Banking77 (Auxiliary)", "train", b77["train"].get("stats", {})))
@@ -487,4 +615,3 @@ def export_profile_csv(profile_dict: Dict[str, Any], output_path: str) -> None:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
-

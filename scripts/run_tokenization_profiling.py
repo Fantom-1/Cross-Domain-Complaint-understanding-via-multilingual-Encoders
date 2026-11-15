@@ -19,6 +19,7 @@ if REPO_ROOT not in sys.path:
 
 from src.data.tokenization_profiler import (
     DEFAULT_TOKENIZER_CHECKPOINT,
+    DEFAULT_TOKENIZER_REVISION,
     TokenizationProfiler,
 )
 
@@ -35,13 +36,14 @@ def main():
     parser.add_argument("--output-json", default=OUTPUT_JSON_DEFAULT, help="Path for output JSON manifest")
     parser.add_argument("--output-csv", default=OUTPUT_CSV_DEFAULT, help="Path for output CSV manifest")
     parser.add_argument("--tokenizer", default=DEFAULT_TOKENIZER_CHECKPOINT, help="Tokenizer checkpoint name or path")
+    parser.add_argument("--revision", default=DEFAULT_TOKENIZER_REVISION, help="Pinned Hugging Face commit revision")
     parser.add_argument("--batch-size", type=int, default=1000, help="Batch size for tokenizer encoding")
-    parser.add_argument("--mock", action="store_true", help="Force mock tokenizer mode for fast verification")
+    parser.add_argument("--mock", action="store_true", help="Explicit opt-in to mock tokenizer mode for testing")
     args = parser.parse_args()
 
     print("=" * 80)
     print("PHASE 4: SUBWORD TOKENIZATION PROFILING RUNNER")
-    print(f"Tokenizer Checkpoint: {args.tokenizer} (mock={args.mock})")
+    print(f"Tokenizer Checkpoint: {args.tokenizer} (revision={args.revision}, mock={args.mock})")
     print(f"Canonical Dataset:   {args.canonical_parquet}")
     print(f"Banking77 Directory: {args.banking77_dir}")
     print(f"Output JSON:         {args.output_json}")
@@ -51,9 +53,11 @@ def main():
     t0 = time.time()
     profiler = TokenizationProfiler(
         tokenizer_name_or_path=args.tokenizer,
+        revision=args.revision,
         mock=args.mock,
     )
     print(f"Tokenizer loaded in {time.time() - t0:.2f}s (Type: {profiler.tokenizer_type}, Vocab: {profiler.vocab_size:,})")
+    print(f"Tokenizer Asset Hashes: {profiler.tokenizer_asset_hashes}")
 
     t1 = time.time()
     manifest = profiler.run_full_profile(
@@ -67,13 +71,18 @@ def main():
 
     canon_overall = manifest["canonical_cfpb"]["text_normalized_overall"]
     print("\n--- Canonical CFPB Profile Summary (Normalized Texts) ---")
-    print(f"Total Rows:     {canon_overall['count']:,}")
-    print(f"Mean Tokens:    {canon_overall['mean']:.2f} (std: {canon_overall['std']:.2f})")
-    print(f"Median Tokens:  {canon_overall['percentiles']['p50']}")
-    print(f"P90 Tokens:     {canon_overall['percentiles']['p90']}")
-    print(f"P95 Tokens:     {canon_overall['percentiles']['p95']}")
-    print(f"P99 Tokens:     {canon_overall['percentiles']['p99']}")
-    print(f"Subword Ratio:  {canon_overall['subword_expansion_ratio']['mean']}x tokens/word")
+    print(f"Total Rows:            {canon_overall['count']:,}")
+    print(f"Mean Tokens:           {canon_overall['mean']:.2f} (std: {canon_overall['std']:.2f})")
+    print(f"Median Tokens:         {canon_overall['percentiles']['p50']}")
+    print(f"P90 Tokens:            {canon_overall['percentiles']['p90']}")
+    print(f"P95 Tokens:            {canon_overall['percentiles']['p95']}")
+    print(f"P99 Tokens:            {canon_overall['percentiles']['p99']}")
+    if canon_overall.get('content_subword_ratio'):
+        cr = canon_overall['content_subword_ratio']
+        print(f"Content Subword Ratio: mean={cr['mean']}x, median={cr['median']}x, p90={cr['p90']}x, min={cr['min']}x, max={cr['max']}x")
+    if canon_overall.get('sequence_subword_ratio'):
+        sr = canon_overall['sequence_subword_ratio']
+        print(f"Sequence Ratio (w/sp): mean={sr['mean']}x, median={sr['median']}x, p90={sr['p90']}x, min={sr['min']}x, max={sr['max']}x")
     print("\nTruncation Coverage at Cutoffs:")
     for cutoff, info in canon_overall["truncation_coverage"].items():
         print(f"  Cutoff {cutoff:>3}: {info['truncated_count']:>5} truncated ({info['truncated_percent']:>5.2f}%) | "

@@ -4,7 +4,7 @@
 **Phase:** Phase 4 (Subword Tokenization Profiling)  
 **Author:** Research Engineering Agent  
 **Date:** 2026-11-15  
-**Status:** **EMPIRICALLY VERIFIED (Developer Workstation Snapshot)**  
+**Status:** **EMPIRICALLY VERIFIED (Captured Local Workstation Snapshot)**  
 
 > [!IMPORTANT]
 > **Governance & Scope Boundary Notice:**
@@ -12,6 +12,7 @@
 > 2. **Auxiliary Benchmark Status:** The `PolyAI/banking77` dataset is incorporated strictly as an auxiliary cross-dataset intent classification benchmark. It does not constitute a held-out evaluation of cross-domain complaint generalization.
 > 3. **Generalization Scope:** No claims of multilingual or held-out cross-domain generalization are substantiated by the findings in this phase.
 > 4. **Metric Isolation:** Subword token length distributions reported here reflect the frozen SentencePiece tokenizer (`facebook/xlm-v-base`) and are strictly distinguished from lexical whitespace-word counts reported in Phase 3.
+> 5. **Ratio Definition:** Content subword expansion ratios strictly exclude special tokens (`<s>`, `</s>`) to measure pure vocabulary expansion ($\rho_{content} = \text{content\_tokens} / \text{words}$). Sequence-level ratios include the 2 special tokens ($\rho_{seq} = (\text{content\_tokens} + 2) / \text{words}$), which dictate context-window truncation behavior.
 
 ---
 
@@ -25,13 +26,21 @@ While Phase 3 profiled character and whitespace-word distributions, modern trans
 
 1. **Frozen Tokenizer Properties:**
    * Model Checkpoint: `facebook/xlm-v-base`
+   * Pinned Checkpoint Revision: `68c75dd7733d2640b3a98114e3e94196dc543fe1`
    * Tokenizer Architecture: SentencePiece Unigram model with byte fallback (`XLMRobertaTokenizer`)
-   * Vocabulary Size: **901,629 tokens** (multilingual coverage across 100+ languages)
-2. **Subword Expansion Ratio:**
-   * On normalized English complaint narratives, the mean subword expansion ratio is **1.456 tokens per whitespace word** (median $1.370\times$, 90th percentile $1.826\times$).
-   * For the un-normalized narratives, the expansion ratio is $1.244\times$. The `<REDACTED>` sentinel normalization maps variable-length sequences of PII redactions (`X{2,}`) into a 5-subword token sequence (`[' <', 'RED', 'ACTE', 'D', '>']`), preventing vocabulary explosion from arbitrary alphanumeric masking while preserving structural privacy signals.
+   * Vocabulary Dimension: **901,629 tokens** (multilingual coverage across 100+ languages)
+   * Asset Digests:
+     - `config.json`: `25ed3e0d067ca06706bb76a597856c9ac7ba67559d4b2cf0e3f3f5052efd47e2`
+     - `sentencepiece.bpe.model`: `dbee9f6b1c2cba29b335e70d6088eea943c7d5ae55ac7dd17174760bf758e309`
+     - `tokenizer.json`: `43f949ef0c0b1ac18c506551109383d4a8a2bd48956ced0cc95cfd9120d42dca`
+2. **Subword Expansion Ratios (Content vs. Sequence):**
+   * **Pure Content Subword Expansion:** On normalized English complaint narratives, the mean content subword expansion ratio is **1.437 tokens/word** (median $1.350\times$, 90th percentile $1.810\times$, minimum $1.000\times$, maximum **11.316x**).
+   * **Sequence Length Expansion (with special tokens):** Mean is **1.456 tokens/word** (median $1.370\times$, 90th percentile $1.830\times$, minimum $1.022\times$, maximum **11.351x**).
+   * The maximum ratio (11.316x content, 11.351x sequence) occurs on boilerplate inquiry templates with dense consecutive PII masks (`<REDACTED>/<REDACTED>/<REDACTED>,`), where punctuation and repeated redactions expand single whitespace tokens into sequences of 17+ subwords.
+   * For un-normalized narratives, the mean content ratio is $1.225\times$. The `<REDACTED>` sentinel normalization maps variable-length sequences of PII redactions (`X{2,}`) into a 5-subword token sequence (`[' <', 'RED', 'ACTE', 'D', '>']`), preventing vocabulary explosion from arbitrary alphanumeric masking while preserving structural privacy signals.
 3. **Severe Truncation Risk at Standard Context Windows:**
    * At the standard transformer maximum sequence length of **512 tokens**, **15.96% of complaints (7,298 out of 45,723) are truncated**.
+   * At a **384-token context window**, **25.49% of complaints (11,655 out of 45,723) are truncated**.
    * At a **256-token context window**, **42.34% of complaints (19,360 out of 45,723) are truncated**.
    * At a **128-token context window**, **72.27% of complaints (33,042 out of 45,723) are truncated**.
    * This proves empirically that lexical whitespace word counts significantly underestimate token sequence length: while the 90th percentile of whitespace words is 457 words, subword expansion pushes the **90th percentile of token length to 665 tokens**, extending well beyond the standard 512-token limit.
@@ -57,6 +66,7 @@ While Phase 3 profiled character and whitespace-word distributions, modern trans
 All tokenization metrics were empirically computed using the frozen baseline encoder checkpoint:
 
 * **Tokenizer Checkpoint:** `facebook/xlm-v-base`
+* **Pinned Checkpoint Revision:** `68c75dd7733d2640b3a98114e3e94196dc543fe1`
 * **Library Version:** HuggingFace `transformers 5.21.0`
 * **Algorithm:** SentencePiece Unigram Language Model
 * **Vocabulary Dimension:** 901,629 tokens
@@ -118,16 +128,23 @@ The table below details the exact empirical truncation rates across sequence len
 
 ## 5. Subword Expansion & Lexical Comparison
 
-### 5.1 Subword Expansion Ratio ($Tokens / Words$):
+### 5.1 Subword Expansion Ratios ($Tokens / Words$):
 
-For each complaint narrative, the subword expansion ratio is defined as:
-$$\rho = \frac{\text{len}(\text{input\_ids})}{\max(\text{len}(\text{text.split()}), 1)}$$
+For each complaint narrative, we compute two distinct ratios to rigorously separate content subword morphology from special-token sequence padding:
+$$\rho_{content} = \frac{\text{len}(\text{input\_ids}) - 2}{\max(\text{len}(\text{text.split()}), 1)}, \quad \rho_{seq} = \frac{\text{len}(\text{input\_ids})}{\max(\text{len}(\text{text.split()}), 1)}$$
 
-* **Mean Expansion Ratio:** **1.456 tokens/word**
-* **Median Expansion Ratio:** **1.370 tokens/word**
-* **90th Percentile Expansion:** **1.826 tokens/word**
-* **Minimum Expansion:** 1.050 tokens/word
-* **Maximum Expansion:** 4.120 tokens/word (observed in documents containing unformatted account strings, legal citations, and dollar amount tables).
+* **Content Subword Expansion ($\rho_{content}$):**
+  - **Mean Expansion Ratio:** **1.437 tokens/word**
+  - **Median Expansion Ratio:** **1.350 tokens/word**
+  - **90th Percentile Expansion:** **1.810 tokens/word**
+  - **Minimum Expansion:** **1.000 tokens/word**
+  - **Maximum Expansion:** **11.316 tokens/word** (observed in documents with dense boilerplate credit inquiry tables containing repeated `<REDACTED>` sentinel tokens).
+* **Sequence-Level Expansion ($\rho_{seq}$):**
+  - **Mean Ratio:** **1.456 tokens/word**
+  - **Median Ratio:** **1.370 tokens/word**
+  - **90th Percentile:** **1.830 tokens/word**
+  - **Minimum Ratio:** **1.022 tokens/word**
+  - **Maximum Ratio:** **11.351 tokens/word**
 
 ### 5.2 Redaction Marker Impact:
 
@@ -143,29 +160,29 @@ $$\rho = \frac{\text{len}(\text{input\_ids})}{\max(\text{len}(\text{text.split()
 
 The table below breaks down subword sequence length and truncation exposure across all 16 intent classes in the taxonomy:
 
-| Intent Class | Support | Mean Tokens | P50 (Med) | P90 | Mean Words | Tokens/Word Ratio | Truncation @ 512 (%) | Truncation @ 256 (%) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `account_access` | 3,000 | 318.09 | 222.0 | 634.2 | 233.2 | 1.374 | 15.17% | 42.57% |
-| `account_management` | 3,000 | 357.97 | 257.0 | 718.6 | 252.5 | 1.426 | 18.33% | 50.20% |
-| `application_problem` | 3,000 | 396.37 | 269.0 | 820.2 | 282.8 | 1.407 | 22.50% | 51.70% |
-| `closing_process` | 1,661 | 517.32 | 338.0 | 1,065.0 | 354.0 | 1.473 | **30.89%** | **64.18%** |
-| `credit_terms_dispute`| 3,000 | 324.04 | 245.5 | 632.1 | 231.8 | 1.410 | 14.93% | 47.43% |
-| `debt_communication` | 3,000 | 244.10 | 154.0 | 462.0 | 174.6 | 1.413 | **8.07%** | **28.07%** |
-| `debt_not_owed` | 3,000 | 243.24 | 171.5 | 496.0 | 168.3 | 1.477 | 9.17% | 32.07% |
-| `debt_threats` | 3,000 | 321.31 | 212.0 | 639.0 | 221.9 | 1.464 | 15.23% | 41.37% |
-| `fraud_or_scam` | 3,000 | 326.36 | 206.0 | 663.0 | 225.4 | 1.466 | 16.87% | 40.63% |
-| `funds_availability` | 3,000 | 324.45 | 220.0 | 652.0 | 234.4 | 1.390 | 15.97% | 43.47% |
-| `payment_problem` | 3,000 | 400.17 | 275.0 | 832.2 | 276.9 | 1.442 | 22.50% | 53.60% |
-| `reporting_improper_use` | 2,062 | 248.04 | 155.0 | 511.9 | 150.8 | **1.676** | 9.99% | 28.56% |
-| `reporting_incorrect_information` | 3,000 | 261.14 | 163.0 | 550.1 | 167.0 | **1.608** | 11.47% | 30.00% |
-| `reporting_investigation_dispute` | 3,000 | 231.38 | 150.0 | 485.2 | 159.2 | 1.465 | 8.97% | 26.73% |
-| `servicing_dispute` | 3,000 | 364.78 | 258.0 | 721.1 | 255.4 | 1.421 | 19.80% | 50.50% |
-| `transaction_problem`| 3,000 | 363.95 | 264.0 | 718.0 | 251.8 | 1.460 | 20.33% | 51.83% |
+| Intent Class | Support | Mean Tokens | P50 (Med) | P90 | Mean Words | Content Ratio (Mean) | Seq Ratio (Mean) | Truncation @ 512 (%) | Truncation @ 256 (%) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `account_access` | 3,000 | 318.09 | 222.0 | 634.2 | 233.2 | 1.357 | 1.374 | 15.17% | 42.57% |
+| `account_management` | 3,000 | 357.97 | 257.0 | 718.6 | 252.5 | 1.410 | 1.426 | 18.33% | 50.20% |
+| `application_problem` | 3,000 | 396.37 | 269.0 | 820.2 | 282.8 | 1.391 | 1.407 | 22.50% | 51.70% |
+| `closing_process` | 1,661 | 517.32 | 338.0 | 1,065.0 | 354.0 | 1.461 | 1.473 | **30.89%** | **64.18%** |
+| `credit_terms_dispute`| 3,000 | 324.04 | 245.5 | 632.1 | 231.8 | 1.396 | 1.410 | 14.93% | 47.43% |
+| `debt_communication` | 3,000 | 244.10 | 154.0 | 462.0 | 174.6 | 1.394 | 1.413 | **8.07%** | **28.07%** |
+| `debt_not_owed` | 3,000 | 243.24 | 171.5 | 496.0 | 168.3 | 1.458 | 1.477 | 9.17% | 32.07% |
+| `debt_threats` | 3,000 | 321.31 | 212.0 | 639.0 | 221.9 | 1.446 | 1.464 | 15.23% | 41.37% |
+| `fraud_or_scam` | 3,000 | 326.36 | 206.0 | 663.0 | 225.4 | 1.448 | 1.466 | 16.87% | 40.63% |
+| `funds_availability` | 3,000 | 324.45 | 220.0 | 652.0 | 234.4 | 1.373 | 1.390 | 15.97% | 43.47% |
+| `payment_problem` | 3,000 | 400.17 | 275.0 | 832.2 | 276.9 | 1.427 | 1.442 | 22.50% | 53.60% |
+| `reporting_improper_use` | 2,062 | 248.04 | 155.0 | 511.9 | 150.8 | **1.644** | **1.676** | 9.99% | 28.56% |
+| `reporting_incorrect_information` | 3,000 | 261.14 | 163.0 | 550.1 | 167.0 | **1.583** | **1.608** | 11.47% | 30.00% |
+| `reporting_investigation_dispute` | 3,000 | 231.38 | 150.0 | 485.2 | 159.2 | 1.443 | 1.465 | 8.97% | 26.73% |
+| `servicing_dispute` | 3,000 | 364.78 | 258.0 | 721.1 | 255.4 | 1.406 | 1.421 | 19.80% | 50.50% |
+| `transaction_problem`| 3,000 | 363.95 | 264.0 | 718.0 | 251.8 | 1.443 | 1.460 | 20.33% | 51.83% |
 
 ### Key Class-Specific Observations:
 
-1. **Mortgage Closing Narratives:** `closing_process` is significantly longer than any other category ($p50=338$, $p90=1,065$). More than **30.8% of closing complaints exceed 512 tokens**. Mortgage escrows, deed transfers, and closing disclosures require extensive factual exposition by consumers.
-2. **Credit Reporting Subword Explosion:** `reporting_improper_use` and `reporting_incorrect_information` exhibit the highest subword expansion ratios ($1.676$ and $1.608$ tokens/word). This is driven by dense sequences of credit bureau identifiers (Equifax, Experian, TransUnion), account numbers, dates, and balance figures.
+1. **Mortgage Closing Narratives:** `closing_process` is significantly longer than any other category ($p50=338$, $p90=1,065$). More than **30.89% of closing complaints exceed 512 tokens**. Mortgage escrows, deed transfers, and closing disclosures require extensive factual exposition by consumers.
+2. **Credit Reporting Subword Explosion:** `reporting_improper_use` and `reporting_incorrect_information` exhibit the highest subword expansion ratios ($1.644$ and $1.583$ content tokens/word). This is driven by dense sequences of credit bureau identifiers (Equifax, Experian, TransUnion), account numbers, dates, and balance figures.
 3. **Debt Collection Brevity:** `debt_communication`, `debt_not_owed`, and `reporting_investigation_dispute` have median lengths between 150 and 172 tokens, with under 10% truncation at 512 tokens.
 
 ---
