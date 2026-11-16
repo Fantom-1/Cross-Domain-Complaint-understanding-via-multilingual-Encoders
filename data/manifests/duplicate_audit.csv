@@ -1,27 +1,29 @@
 metric_name,metric_value,description
 total_records,45723,Total instances in canonical dataset
 unique_example_ids,45723,Count of unique example_id values
+duplicate_example_ids,0,Count of duplicate example_id instances
+unique_source_ids,45723,Count of unique source_id values
 duplicate_source_ids,0,Count of duplicate source_id instances
 unique_raw_hashes,44870,Count of unique SHA-256 hashes on raw narrative
-unique_normalized_hashes,44755,Count of unique SHA-256 hashes on normalized narrative
-exact_duplicate_instances,1257,Total records belonging to an exact duplicate collision
-exact_duplicate_hash_count,289,Count of distinct hashes with exact duplicates
+unique_normalized_hashes,44754,Count of unique SHA-256 hashes on normalized narrative
+exact_duplicate_instances,1259,Total records belonging to an exact duplicate collision
+exact_duplicate_hash_count,290,Count of distinct hashes with exact duplicates
 exact_clusters_with_label_conflict,31,Exact duplicate text collisions with conflicting intent_labels
-total_groups,42818,Total group_id partitions
-singleton_groups,42098,Group partitions containing exactly 1 instance
-multi_item_clusters,720,Group partitions containing >1 instances (clusters)
-multi_item_instances,3625,Total records contained in multi-item clusters
-max_cluster_size,159,Maximum record count in any single cluster
-mean_cluster_size,5.035,Mean record count across multi-item clusters
+total_groups,43142,Total verified cluster partitions
+singleton_groups,42450,Cluster partitions containing exactly 1 instance
+multi_item_clusters,692,Verified near-duplicate clusters containing >1 instances
+multi_item_instances,3273,Total records contained in multi-item clusters
+max_cluster_size,123,Maximum record count in any single cluster
+mean_cluster_size,4.73,Mean record count across multi-item clusters
 median_cluster_size,2.0,Median record count across multi-item clusters
 p75_cluster_size,3.0,75th percentile record count across multi-item clusters
-p90_cluster_size,8.1,90th percentile record count across multi-item clusters
-group_clusters_with_label_conflict,167,Near-duplicate clusters with conflicting intent_labels
-train_val_group_leakage,0,Count of group_id values shared between train and validation
-train_test_group_leakage,0,Count of group_id values shared between train and test
-val_test_group_leakage,0,Count of group_id values shared between validation and test
+p90_cluster_size,8.0,90th percentile record count across multi-item clusters
+group_clusters_with_label_conflict,135,Verified near-duplicate clusters with conflicting intent_labels
+train_val_group_leakage,0,Count of verified clusters shared between train and validation
+train_test_group_leakage,0,Count of verified clusters shared between train and test
+val_test_group_leakage,0,Count of verified clusters shared between validation and test
 train_val_hash_leakage,0,Count of text_hash values shared between train and validation
 train_test_hash_leakage,0,Count of text_hash values shared between train and test
 val_test_hash_leakage,0,Count of text_hash values shared between validation and test
 zero_leakage_verified,True,Boolean flag confirming absolute zero partition leakage
-banking77_contamination_count,0,Exact collisions between CFPB complaints and Banking77 queries
+banking77_contamination_count,0,Exact and near-duplicate collisions between CFPB complaints and Banking77 queries

@@ -60,15 +60,22 @@ EXPECTED_CANONICAL_SHA256 = "b591ba980a99ba820ec8e42676cba75afa0ee2222725e1917ea
 EXPECTED_B77_TRAIN_SHA256 = "b06e26ac675513959a63135f11b94ea7786ed02da65db93a5650d8838cbc664b"
 EXPECTED_B77_TEST_SHA256 = "d12d6e3bc4c3103966ae786dc435913c0c563dfa328f5a3646d0e62cfeeb474d"
 
-EXPECTED_AUDIT_METRICS_COUNT = 26
+EXPECTED_AUDIT_METRICS_COUNT = 28
 EXPECTED_TOTAL_RECORDS = 45723
 EXPECTED_UNIQUE_EXAMPLE_IDS = 45723
-EXPECTED_TOTAL_GROUPS = 42818
-EXPECTED_MULTI_ITEM_CLUSTERS = 720
-EXPECTED_MULTI_ITEM_INSTANCES = 3625
-EXPECTED_MAX_CLUSTER_SIZE = 159
+EXPECTED_UNIQUE_SOURCE_IDS = 45723
+EXPECTED_DUPLICATE_EXAMPLE_IDS = 0
+EXPECTED_DUPLICATE_SOURCE_IDS = 0
+EXPECTED_UNIQUE_NORMALIZED_HASHES = 44754
+EXPECTED_EXACT_DUPLICATE_INSTANCES = 1259
+EXPECTED_EXACT_DUPLICATE_HASH_COUNT = 290
 EXPECTED_EXACT_CONFLICTS = 31
-EXPECTED_GROUP_CONFLICTS = 167
+EXPECTED_TOTAL_GROUPS = 43142
+EXPECTED_SINGLETON_GROUPS = 42450
+EXPECTED_MULTI_ITEM_CLUSTERS = 692
+EXPECTED_MULTI_ITEM_INSTANCES = 3273
+EXPECTED_MAX_CLUSTER_SIZE = 123
+EXPECTED_GROUP_CONFLICTS = 135
 
 EXPECTED_CLUSTER_COLUMNS = [
     "cluster_id",
@@ -251,6 +258,12 @@ def _run_phase5_audit_internal(
                     log(f"Total records mismatch in audit manifest: got {audit_metrics.get('total_records')}, expected {EXPECTED_TOTAL_RECORDS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("unique_example_ids", -1)) != EXPECTED_UNIQUE_EXAMPLE_IDS:
                     log(f"Unique example IDs mismatch: got {audit_metrics.get('unique_example_ids')}, expected {EXPECTED_UNIQUE_EXAMPLE_IDS}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("duplicate_example_ids", -1)) != EXPECTED_DUPLICATE_EXAMPLE_IDS:
+                    log(f"Duplicate example IDs mismatch: got {audit_metrics.get('duplicate_example_ids')}, expected {EXPECTED_DUPLICATE_EXAMPLE_IDS}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("unique_source_ids", -1)) != EXPECTED_UNIQUE_SOURCE_IDS:
+                    log(f"Unique source IDs mismatch: got {audit_metrics.get('unique_source_ids')}, expected {EXPECTED_UNIQUE_SOURCE_IDS}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("duplicate_source_ids", -1)) != EXPECTED_DUPLICATE_SOURCE_IDS:
+                    log(f"Duplicate source IDs mismatch: got {audit_metrics.get('duplicate_source_ids')}, expected {EXPECTED_DUPLICATE_SOURCE_IDS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("total_groups", -1)) != EXPECTED_TOTAL_GROUPS:
                     log(f"Total groups mismatch: got {audit_metrics.get('total_groups')}, expected {EXPECTED_TOTAL_GROUPS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("multi_item_clusters", -1)) != EXPECTED_MULTI_ITEM_CLUSTERS:
@@ -384,15 +397,15 @@ def _run_phase5_audit_internal(
                 # Headline metrics reconciliation
                 metrics_to_verify = [
                     ("Total records", "45,723"),
-                    ("Unique normalized hashes", "44,755"),
-                    ("Exact duplicate instances", "1,257"),
-                    ("Total groups", "42,818"),
-                    ("Multi-item clusters", "720"),
-                    ("Multi-item instances", "3,625"),
-                    ("Max cluster size", "159"),
-                    ("Mean cluster size", "5.035"),
-                    ("Exact duplicate label conflicts", "31"),
-                    ("Near-duplicate label conflicts", "167"),
+                    ("Unique normalized text hashes", "44,754"),
+                    ("Total records in exact duplicate collisions", "1,259"),
+                    ("Total partitions (`cluster_id`)", "43,142"),
+                    ("Multi-item near-duplicate clusters", "692"),
+                    ("comprising **3,273** records", "3,273"),
+                    ("Max **123**", "123"),
+                    ("Mean **4.73**", "4.73"),
+                    ("Exact duplicate collisions with conflicting intent labels", "31"),
+                    ("Near-duplicate clusters with conflicting intent labels", "135"),
                 ]
                 for label, exp_val in metrics_to_verify:
                     if exp_val not in rep_txt:

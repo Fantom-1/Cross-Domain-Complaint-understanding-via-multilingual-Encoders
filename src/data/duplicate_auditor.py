@@ -1,13 +1,17 @@
 """Core module for Phase 5: Duplicate, Overlap, and Contamination Audit.
 
-Provides comprehensive, auditable duplicate detection, near-duplicate clustering via
-MinHash LSH, cluster diameter/chain-merging risk quantification, weak administrative
-label conflict analysis, and cross-partition zero-leakage verification.
+Provides comprehensive, auditable duplicate detection, empirical near-duplicate clustering via
+MinHash LSH with verified candidate Jaccard similarity, cluster diameter/chain-merging risk quantification,
+weak administrative label conflict analysis, symmetric cross-dataset contamination verification,
+and cross-partition zero-leakage verification.
 
 Mathematical Guarantees:
 - Exact hashing: 64-character SHA-256 for deterministic collision identification.
+- Symmetric normalization: Unicode NFC canonical normalization, lowercasing, and whitespace collapsing.
 - MinHash LSH: 64 affine hash permutations with Mersenne prime P = 2^31 - 1 = 2,147,483,647.
   16 bands of 4 rows each evaluate Jaccard similarity at threshold s ~= (1/b)^(1/r) ~= (1/16)^(1/4) ~= 0.5.
+- Verified Candidate Clustering: LSH candidate pairs undergo explicit Jaccard similarity evaluation;
+  false-positive collisions (s < 0.50) are rejected before union-find merging.
 - Cycle-free Disjoint Set Union (Union-Find) with path compression for cluster grouping.
 - Partition exclusivity: Strict zero-leakage verification across train, validation, and test splits:
   Train_groups ∩ Val_groups = ∅, Train_groups ∩ Test_groups = ∅, Val_groups ∩ Test_groups = ∅.
@@ -19,12 +23,19 @@ import hashlib
 import json
 import os
 import random
+import unicodedata
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 try:
     import numpy as np
 except ImportError:
     np = None
+
+
+def normalize_for_comparison(text: str) -> str:
+    """Symmetric Unicode NFC normalization, lowercasing, and whitespace collapsing."""
+    text = unicodedata.normalize("NFC", text or "")
+    return " ".join(text.lower().split())
 
 
 def compute_sha256(text: str) -> str:
@@ -147,11 +158,13 @@ class DuplicateAuditor:
         bands: int = 16,
         seed: int = 13,
         max_shingles: int = 400,
+        jaccard_threshold: float = 0.50,
     ):
         self.n_perm = n_perm
         self.bands = bands
         self.seed = seed
         self.max_shingles = max_shingles
+        self.jaccard_threshold = jaccard_threshold
         self.minhasher = MinHasher(n_perm=n_perm, bands=bands, seed=seed)
 
     def audit_records(
@@ -172,26 +185,53 @@ class DuplicateAuditor:
         """
         total_records = len(records)
         example_ids = set()
+        duplicate_example_ids = 0
+
+        source_ids = set()
+        duplicate_source_ids = 0
+
         raw_hashes = set()
         norm_hashes = set()
 
-        # Track hash frequencies
+        # Track hash frequencies and exact groups
+        exact_map: Dict[str, str] = {}
+        unique_shingles: Dict[str, Set[str]] = {}
         norm_hash_to_records = collections.defaultdict(list)
-        source_id_counts = collections.defaultdict(int)
 
         for r in records:
+            # Example ID uniqueness
             eid = r["example_id"]
-            source_id_counts[eid] += 1
+            if eid in example_ids:
+                duplicate_example_ids += 1
             example_ids.add(eid)
 
+            # Explicit source_id tracking with missing-field policy
+            if "source_id" in r and r["source_id"] is not None:
+                sid = str(r["source_id"]).strip()
+                if sid in source_ids:
+                    duplicate_source_ids += 1
+                source_ids.add(sid)
+
+            # Raw text hash
             raw_txt = r.get("text_original", r.get("text_normalized", ""))
             raw_h = compute_sha256(raw_txt)
             raw_hashes.add(raw_h)
 
-            norm_txt = r["text_normalized"]
+            # Symmetrically normalized text hash
+            norm_txt = normalize_for_comparison(r["text_normalized"])
             norm_h = compute_sha256(norm_txt)
             norm_hashes.add(norm_h)
             norm_hash_to_records[norm_h].append(r)
+
+            if norm_h not in exact_map:
+                exact_map[norm_h] = f"grp_exact_{norm_h[:12]}"
+                sh = compute_word_shingles(norm_txt, k=5)
+                if len(sh) > self.max_shingles:
+                    sh = set(sorted(sh)[: self.max_shingles])
+                unique_shingles[norm_h] = sh
+
+            r["text_hash"] = norm_h
+            r["exact_group_id"] = exact_map[norm_h]
 
         # 1. Exact duplicates analysis
         exact_colliding_hashes = {h: recs for h, recs in norm_hash_to_records.items() if len(recs) > 1}
@@ -212,15 +252,53 @@ class DuplicateAuditor:
                     "sample_text": recs[0]["text_normalized"][:150],
                 })
 
-        # 2. Group & Cluster analysis (existing canonical group_id vs recomputed)
-        group_to_records = collections.defaultdict(list)
-        for r in records:
-            grp = r["group_id"]
-            group_to_records[grp].append(r)
+        # 2. MinHash LSH indexing on unique texts
+        lsh_buckets = collections.defaultdict(list)
+        for h, sh in unique_shingles.items():
+            sig = self.minhasher.signature(sh)
+            if sig is not None:
+                for b_idx, b_hash in enumerate(self.minhasher.band_hashes(sig)):
+                    lsh_buckets[(b_idx, b_hash)].append(h)
 
-        total_groups = len(group_to_records)
-        singleton_groups = sum(1 for recs in group_to_records.values() if len(recs) == 1)
-        multi_item_groups = {grp: recs for grp, recs in group_to_records.items() if len(recs) > 1}
+        # Candidate pairs generation
+        candidate_pairs = set()
+        for members in lsh_buckets.values():
+            if len(members) > 1:
+                for i in range(len(members)):
+                    for j in range(i + 1, len(members)):
+                        h1 = min(members[i], members[j])
+                        h2 = max(members[i], members[j])
+                        candidate_pairs.add((h1, h2))
+
+        # Union-Find initialized with exact groups
+        uf = UnionFind()
+        for h in unique_shingles.keys():
+            uf.find(exact_map[h])
+
+        # Candidate Jaccard verification: reject false bridges (s < threshold)
+        verified_candidate_pairs = 0
+        rejected_candidate_pairs = 0
+        for h1, h2 in candidate_pairs:
+            sim = jaccard_similarity(unique_shingles[h1], unique_shingles[h2])
+            if sim >= self.jaccard_threshold:
+                verified_candidate_pairs += 1
+                uf.union(exact_map[h1], exact_map[h2])
+            else:
+                rejected_candidate_pairs += 1
+
+        # Assign final verified cluster_id to each record
+        for r in records:
+            r["cluster_id"] = uf.find(r["exact_group_id"])
+
+        # Cluster analysis on verified clusters
+        cluster_to_records = collections.defaultdict(list)
+        for r in records:
+            cid = r["cluster_id"]
+            cluster_to_records[cid].append(r)
+
+        total_groups = len(cluster_to_records)
+        singleton_groups = sum(1 for recs in cluster_to_records.values() if len(recs) == 1)
+        multi_item_groups = {cid: recs for cid, recs in cluster_to_records.items() if len(recs) > 1}
         multi_item_cluster_count = len(multi_item_groups)
         multi_item_instance_count = sum(len(recs) for recs in multi_item_groups.values())
 
@@ -231,15 +309,15 @@ class DuplicateAuditor:
         p75_cluster_size = float(np.percentile(cluster_sizes, 75)) if cluster_sizes and np else 0.0
         p90_cluster_size = float(np.percentile(cluster_sizes, 90)) if cluster_sizes and np else 0.0
 
-        # Label conflicts in multi-item groups
+        # Label conflicts in multi-item clusters
         group_conflicts = 0
         group_conflict_details = []
-        for grp, recs in multi_item_groups.items():
+        for cid, recs in multi_item_groups.items():
             labels = {r.get("intent_label") for r in recs}
             if len(labels) > 1:
                 group_conflicts += 1
                 group_conflict_details.append({
-                    "group_id": grp,
+                    "cluster_id": cid,
                     "cluster_size": len(recs),
                     "unique_labels": len(labels),
                     "labels": list(labels),
@@ -247,31 +325,31 @@ class DuplicateAuditor:
                 })
 
         # 3. Partition / Split Leakage Verification
-        train_groups = set()
-        val_groups = set()
-        test_groups = set()
+        train_clusters = set()
+        val_clusters = set()
+        test_clusters = set()
 
         train_hashes = set()
         val_hashes = set()
         test_hashes = set()
 
         for r in records:
-            grp = r["group_id"]
-            h = compute_sha256(r["text_normalized"])
+            cid = r["cluster_id"]
+            h = r["text_hash"]
             sp = r.get("split")
             if sp == "train":
-                train_groups.add(grp)
+                train_clusters.add(cid)
                 train_hashes.add(h)
             elif sp == "validation":
-                val_groups.add(grp)
+                val_clusters.add(cid)
                 val_hashes.add(h)
             elif sp == "test":
-                test_groups.add(grp)
+                test_clusters.add(cid)
                 test_hashes.add(h)
 
-        train_val_group_leakage = len(train_groups.intersection(val_groups))
-        train_test_group_leakage = len(train_groups.intersection(test_groups))
-        val_test_group_leakage = len(val_groups.intersection(test_groups))
+        train_val_group_leakage = len(train_clusters.intersection(val_clusters))
+        train_test_group_leakage = len(train_clusters.intersection(test_clusters))
+        val_test_group_leakage = len(val_clusters.intersection(test_clusters))
 
         train_val_hash_leakage = len(train_hashes.intersection(val_hashes))
         train_test_hash_leakage = len(train_hashes.intersection(test_hashes))
@@ -281,35 +359,64 @@ class DuplicateAuditor:
         total_hash_leakage = train_val_hash_leakage + train_test_hash_leakage + val_test_hash_leakage
         zero_leakage_verified = (total_group_leakage == 0) and (total_hash_leakage == 0)
 
-        # 4. Cross-dataset contamination check (Banking77)
+        # 4. Cross-dataset contamination check (Banking77) with symmetric normalization & LSH near-duplicate verification
         banking77_exact_contamination = 0
+        banking77_near_contamination = 0
         banking77_contaminated_samples = []
+
         if auxiliary_records:
-            cfpb_norm_set = {compute_sha256(r["text_normalized"]): r for r in records}
+            cfpb_norm_hash_set = set(unique_shingles.keys())
+            # For each auxiliary query, symmetrically normalize
             for aux_r in auxiliary_records:
-                aux_txt = aux_r.get("text", aux_r.get("text_normalized", "")).strip().lower()
-                aux_h = compute_sha256(aux_txt)
-                if aux_h in cfpb_norm_set:
+                aux_raw = aux_r.get("text", aux_r.get("text_normalized", ""))
+                aux_norm = normalize_for_comparison(aux_raw)
+                aux_h = compute_sha256(aux_norm)
+
+                # Check exact collision
+                if aux_h in cfpb_norm_hash_set:
                     banking77_exact_contamination += 1
                     banking77_contaminated_samples.append({
-                        "banking77_text": aux_txt,
-                        "cfpb_example_id": cfpb_norm_set[aux_h]["example_id"],
+                        "type": "exact",
+                        "aux_text": aux_norm,
+                        "text_hash": aux_h,
                     })
+
+                # Check near-duplicate collision via LSH candidate lookup
+                aux_sh = compute_word_shingles(aux_norm, k=5)
+                if len(aux_sh) > self.max_shingles:
+                    aux_sh = set(sorted(aux_sh)[: self.max_shingles])
+                aux_sig = self.minhasher.signature(aux_sh)
+                if aux_sig is not None:
+                    aux_cand_hashes = set()
+                    for b_idx, b_hash in enumerate(self.minhasher.band_hashes(aux_sig)):
+                        if (b_idx, b_hash) in lsh_buckets:
+                            aux_cand_hashes.update(lsh_buckets[(b_idx, b_hash)])
+
+                    for cand_h in aux_cand_hashes:
+                        sim = jaccard_similarity(aux_sh, unique_shingles[cand_h])
+                        if sim >= self.jaccard_threshold:
+                            banking77_near_contamination += 1
+                            banking77_contaminated_samples.append({
+                                "type": "near_duplicate",
+                                "similarity": sim,
+                                "aux_text": aux_norm,
+                                "cfpb_text_hash": cand_h,
+                            })
 
         # 5. Build cluster catalog records for manifest
         cluster_catalog_rows = []
-        for grp, recs in multi_item_groups.items():
+        for cid, recs in multi_item_groups.items():
             label_counts = collections.Counter(r.get("intent_label") for r in recs)
             dominant_label, dominant_cnt = label_counts.most_common(1)[0]
             dominant_pct = round(100.0 * dominant_cnt / len(recs), 2)
             has_conflict = len(label_counts) > 1
-            is_exact = len({compute_sha256(r["text_normalized"]) for r in recs}) == 1
+            is_exact = len({r["text_hash"] for r in recs}) == 1
 
             for r in recs:
                 cluster_catalog_rows.append({
-                    "cluster_id": grp,
+                    "cluster_id": cid,
                     "example_id": r["example_id"],
-                    "text_hash": compute_sha256(r["text_normalized"]),
+                    "text_hash": r["text_hash"],
                     "cluster_size": len(recs),
                     "intent_label": r.get("intent_label", ""),
                     "source_label": r.get("source_label", ""),
@@ -325,7 +432,9 @@ class DuplicateAuditor:
         summary = {
             "total_records": total_records,
             "unique_example_ids": len(example_ids),
-            "duplicate_source_ids": total_records - len(example_ids),
+            "duplicate_example_ids": duplicate_example_ids,
+            "unique_source_ids": len(source_ids) if source_ids else (len(example_ids) if not duplicate_source_ids else 0),
+            "duplicate_source_ids": duplicate_source_ids,
             "unique_raw_hashes": len(raw_hashes),
             "unique_normalized_hashes": len(norm_hashes),
             "exact_duplicate_instances": exact_duplicate_instances,
@@ -348,7 +457,12 @@ class DuplicateAuditor:
             "train_test_hash_leakage": train_test_hash_leakage,
             "val_test_hash_leakage": val_test_hash_leakage,
             "zero_leakage_verified": zero_leakage_verified,
-            "banking77_contamination_count": banking77_exact_contamination,
+            "banking77_contamination_count": banking77_exact_contamination + banking77_near_contamination,
+            "banking77_exact_contamination": banking77_exact_contamination,
+            "banking77_near_contamination": banking77_near_contamination,
+            "lsh_candidate_pairs_evaluated": len(candidate_pairs),
+            "lsh_verified_pairs": verified_candidate_pairs,
+            "lsh_rejected_false_bridges": rejected_candidate_pairs,
         }
 
         return {
@@ -356,6 +470,7 @@ class DuplicateAuditor:
             "cluster_catalog": cluster_catalog_rows,
             "exact_conflicts": exact_conflicted_details,
             "group_conflicts": group_conflict_details,
+            "banking77_contaminated_samples": banking77_contaminated_samples,
         }
 
     def compute_cluster_diameters(
@@ -364,23 +479,25 @@ class DuplicateAuditor:
         sample_clusters: int = 50,
         max_pairs_per_cluster: int = 200,
     ) -> Dict[str, Any]:
-        """Calculates pairwise Jaccard similarity and diameter statistics for multi-item clusters
+        """Calculates pairwise Jaccard similarity and diameter statistics for multi-item clusters.
 
         Quantifies chain-merging risk: if a cluster has high diameter (low minimum pairwise similarity),
         it indicates transitive chaining where disparate texts are chained together.
+        Uses stable digest-derived PRNG seeding for cross-process determinism.
         """
         group_to_shingles = collections.defaultdict(list)
         for r in records:
-            grp = r["group_id"]
-            sh = compute_word_shingles(r["text_normalized"])
+            cid = r.get("cluster_id", r.get("group_id"))
+            norm_t = normalize_for_comparison(r.get("text_normalized", ""))
+            sh = compute_word_shingles(norm_t)
             if len(sh) > self.max_shingles:
                 sh = set(sorted(sh)[: self.max_shingles])
-            group_to_shingles[grp].append((r["example_id"], sh))
+            group_to_shingles[cid].append((r["example_id"], sh))
 
         multi_groups = [g for g, items in group_to_shingles.items() if len(items) > 1]
         
-        # Sort by cluster size descending to prioritize large candidate chains
-        multi_groups.sort(key=lambda g: len(group_to_shingles[g]), reverse=True)
+        # Sort deterministically by cluster size descending, then cluster_id
+        multi_groups.sort(key=lambda g: (-len(group_to_shingles[g]), g))
         sampled_groups = multi_groups[:sample_clusters]
 
         cluster_stats = []
@@ -388,7 +505,8 @@ class DuplicateAuditor:
         all_mean_similarities = []
 
         for grp in sampled_groups:
-            items = group_to_shingles[grp]
+            # Sort items deterministically by example_id
+            items = sorted(group_to_shingles[grp], key=lambda x: x[0])
             n_items = len(items)
             pair_similarities = []
 
@@ -398,7 +516,10 @@ class DuplicateAuditor:
                         s = jaccard_similarity(items[i][1], items[j][1])
                         pair_similarities.append(s)
             else:
-                rng = random.Random(self.seed + hash(grp) % 10000)
+                # Stable digest-derived PRNG seeding for cross-process reproducibility
+                grp_digest = hashlib.sha256(str(grp).encode("utf-8")).digest()
+                grp_seed_int = int.from_bytes(grp_digest[:4], "big")
+                rng = random.Random(self.seed + grp_seed_int)
                 for _ in range(max_pairs_per_cluster):
                     i, j = rng.sample(range(n_items), 2)
                     s = jaccard_similarity(items[i][1], items[j][1])
@@ -412,7 +533,7 @@ class DuplicateAuditor:
                 all_mean_similarities.append(mean_sim)
 
                 cluster_stats.append({
-                    "group_id": grp,
+                    "cluster_id": grp,
                     "size": n_items,
                     "min_pairwise_jaccard": round(min_sim, 4),
                     "mean_pairwise_jaccard": round(mean_sim, 4),

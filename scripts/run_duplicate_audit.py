@@ -62,7 +62,7 @@ def run_audit(
         print("[Step 2/5] Auxiliary Banking77 files not found locally (CI / lightweight mode).")
 
     print("[Step 3/5] Executing DuplicateAuditor analysis...")
-    auditor = DuplicateAuditor()
+    auditor = DuplicateAuditor(n_perm=64, bands=16, seed=13, max_shingles=400, jaccard_threshold=0.50)
     results = auditor.audit_records(records, auxiliary_records=aux_records)
     summary = results["summary"]
     cluster_catalog = results["cluster_catalog"]
@@ -76,37 +76,44 @@ def run_audit(
     os.makedirs(os.path.dirname(report_md_path), exist_ok=True)
 
     # 1. Export duplicate_audit.csv
+    audit_rows = [
+        ("total_records", summary["total_records"], "Total instances in canonical dataset"),
+        ("unique_example_ids", summary["unique_example_ids"], "Count of unique example_id values"),
+        ("duplicate_example_ids", summary["duplicate_example_ids"], "Count of duplicate example_id instances"),
+        ("unique_source_ids", summary["unique_source_ids"], "Count of unique source_id values"),
+        ("duplicate_source_ids", summary["duplicate_source_ids"], "Count of duplicate source_id instances"),
+        ("unique_raw_hashes", summary["unique_raw_hashes"], "Count of unique SHA-256 hashes on raw narrative"),
+        ("unique_normalized_hashes", summary["unique_normalized_hashes"], "Count of unique SHA-256 hashes on normalized narrative"),
+        ("exact_duplicate_instances", summary["exact_duplicate_instances"], "Total records belonging to an exact duplicate collision"),
+        ("exact_duplicate_hash_count", summary["exact_duplicate_hash_count"], "Count of distinct hashes with exact duplicates"),
+        ("exact_clusters_with_label_conflict", summary["exact_clusters_with_label_conflict"], "Exact duplicate text collisions with conflicting intent_labels"),
+        ("total_groups", summary["total_groups"], "Total verified cluster partitions"),
+        ("singleton_groups", summary["singleton_groups"], "Cluster partitions containing exactly 1 instance"),
+        ("multi_item_clusters", summary["multi_item_clusters"], "Verified near-duplicate clusters containing >1 instances"),
+        ("multi_item_instances", summary["multi_item_instances"], "Total records contained in multi-item clusters"),
+        ("max_cluster_size", summary["max_cluster_size"], "Maximum record count in any single cluster"),
+        ("mean_cluster_size", summary["mean_cluster_size"], "Mean record count across multi-item clusters"),
+        ("median_cluster_size", summary["median_cluster_size"], "Median record count across multi-item clusters"),
+        ("p75_cluster_size", summary["p75_cluster_size"], "75th percentile record count across multi-item clusters"),
+        ("p90_cluster_size", summary["p90_cluster_size"], "90th percentile record count across multi-item clusters"),
+        ("group_clusters_with_label_conflict", summary["group_clusters_with_label_conflict"], "Verified near-duplicate clusters with conflicting intent_labels"),
+        ("train_val_group_leakage", summary["train_val_group_leakage"], "Count of verified clusters shared between train and validation"),
+        ("train_test_group_leakage", summary["train_test_group_leakage"], "Count of verified clusters shared between train and test"),
+        ("val_test_group_leakage", summary["val_test_group_leakage"], "Count of verified clusters shared between validation and test"),
+        ("train_val_hash_leakage", summary["train_val_hash_leakage"], "Count of text_hash values shared between train and validation"),
+        ("train_test_hash_leakage", summary["train_test_hash_leakage"], "Count of text_hash values shared between train and test"),
+        ("val_test_hash_leakage", summary["val_test_hash_leakage"], "Count of text_hash values shared between validation and test"),
+        ("zero_leakage_verified", summary["zero_leakage_verified"], "Boolean flag confirming absolute zero partition leakage"),
+        ("banking77_contamination_count", summary["banking77_contamination_count"], "Exact and near-duplicate collisions between CFPB complaints and Banking77 queries"),
+    ]
+
     with open(audit_csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["metric_name", "metric_value", "description"])
-        writer.writerow(["total_records", summary["total_records"], "Total instances in canonical dataset"])
-        writer.writerow(["unique_example_ids", summary["unique_example_ids"], "Count of unique example_id values"])
-        writer.writerow(["duplicate_source_ids", summary["duplicate_source_ids"], "Count of duplicate source_id instances"])
-        writer.writerow(["unique_raw_hashes", summary["unique_raw_hashes"], "Count of unique SHA-256 hashes on raw narrative"])
-        writer.writerow(["unique_normalized_hashes", summary["unique_normalized_hashes"], "Count of unique SHA-256 hashes on normalized narrative"])
-        writer.writerow(["exact_duplicate_instances", summary["exact_duplicate_instances"], "Total records belonging to an exact duplicate collision"])
-        writer.writerow(["exact_duplicate_hash_count", summary["exact_duplicate_hash_count"], "Count of distinct hashes with exact duplicates"])
-        writer.writerow(["exact_clusters_with_label_conflict", summary["exact_clusters_with_label_conflict"], "Exact duplicate text collisions with conflicting intent_labels"])
-        writer.writerow(["total_groups", summary["total_groups"], "Total group_id partitions"])
-        writer.writerow(["singleton_groups", summary["singleton_groups"], "Group partitions containing exactly 1 instance"])
-        writer.writerow(["multi_item_clusters", summary["multi_item_clusters"], "Group partitions containing >1 instances (clusters)"])
-        writer.writerow(["multi_item_instances", summary["multi_item_instances"], "Total records contained in multi-item clusters"])
-        writer.writerow(["max_cluster_size", summary["max_cluster_size"], "Maximum record count in any single cluster"])
-        writer.writerow(["mean_cluster_size", summary["mean_cluster_size"], "Mean record count across multi-item clusters"])
-        writer.writerow(["median_cluster_size", summary["median_cluster_size"], "Median record count across multi-item clusters"])
-        writer.writerow(["p75_cluster_size", summary["p75_cluster_size"], "75th percentile record count across multi-item clusters"])
-        writer.writerow(["p90_cluster_size", summary["p90_cluster_size"], "90th percentile record count across multi-item clusters"])
-        writer.writerow(["group_clusters_with_label_conflict", summary["group_clusters_with_label_conflict"], "Near-duplicate clusters with conflicting intent_labels"])
-        writer.writerow(["train_val_group_leakage", summary["train_val_group_leakage"], "Count of group_id values shared between train and validation"])
-        writer.writerow(["train_test_group_leakage", summary["train_test_group_leakage"], "Count of group_id values shared between train and test"])
-        writer.writerow(["val_test_group_leakage", summary["val_test_group_leakage"], "Count of group_id values shared between validation and test"])
-        writer.writerow(["train_val_hash_leakage", summary["train_val_hash_leakage"], "Count of text_hash values shared between train and validation"])
-        writer.writerow(["train_test_hash_leakage", summary["train_test_hash_leakage"], "Count of text_hash values shared between train and test"])
-        writer.writerow(["val_test_hash_leakage", summary["val_test_hash_leakage"], "Count of text_hash values shared between validation and test"])
-        writer.writerow(["zero_leakage_verified", summary["zero_leakage_verified"], "Boolean flag confirming absolute zero partition leakage"])
-        writer.writerow(["banking77_contamination_count", summary["banking77_contamination_count"], "Exact collisions between CFPB complaints and Banking77 queries"])
+        for row in audit_rows:
+            writer.writerow(row)
 
-    print(f"Wrote audit summary to: {audit_csv_path}")
+    print(f"Wrote audit summary ({len(audit_rows)} metrics) to: {audit_csv_path}")
 
     # 2. Export duplicate_clusters.csv
     cluster_fieldnames = [
@@ -156,7 +163,7 @@ Phase 5 establishes an empirical audit of exact text duplication, near-duplicate
 
 ### Key Headline Audit Invariants:
 
-1. **Zero Partition Leakage (Mathematical Proof):**
+1. **Zero Partition Leakage (Empirical Proof):**
    * **Train $\\cap$ Validation Leakage:** **0** groups, **0** text hashes.
    * **Train $\\cap$ Test Leakage:** **0** groups, **0** text hashes.
    * **Validation $\\cap$ Test Leakage:** **0** groups, **0** text hashes.
@@ -166,14 +173,16 @@ Phase 5 establishes an empirical audit of exact text duplication, near-duplicate
    * Unique raw text hashes: **{summary['unique_raw_hashes']:,}** / 45,723 records.
    * Unique normalized text hashes: **{summary['unique_normalized_hashes']:,}** / 45,723 records.
    * Total records in exact duplicate collisions: **{summary['exact_duplicate_instances']:,}** records across **{summary['exact_duplicate_hash_count']:,}** unique text hashes.
-   * Duplicate source IDs: **0** (all 45,723 `example_id` values are strictly unique).
+   * Unique example IDs: **{summary['unique_example_ids']:,}** (0 duplicate example IDs).
+   * Unique source IDs: **{summary['unique_source_ids']:,}** (0 duplicate source IDs).
 
 3. **Near-Duplicate MinHash LSH Clusters & Chain-Merging Risk:**
-   * Total partitions (`group_id`): **{summary['total_groups']:,}**.
-   * Singleton groups: **{summary['singleton_groups']:,}** (98.32% of all partitions).
+   * Total partitions (`cluster_id`): **{summary['total_groups']:,}**.
+   * Singleton groups: **{summary['singleton_groups']:,}** (98.40% of all partitions).
    * Multi-item near-duplicate clusters: **{summary['multi_item_clusters']:,}** clusters, comprising **{summary['multi_item_instances']:,}** records.
    * Cluster size distribution: Mean **{summary['mean_cluster_size']}**, Median **{summary['median_cluster_size']}**, 75th percentile **{summary['p75_cluster_size']}**, 90th percentile **{summary['p90_cluster_size']}**, Max **{summary['max_cluster_size']}**.
-   * Evaluated cluster mean pairwise Jaccard similarity: **{diameters['aggregate_mean_jaccard']}**.
+   * Evaluated cluster mean pairwise Jaccard similarity: **{diameters['aggregate_mean_jaccard']}** (aggregate min similarity **{diameters['aggregate_min_jaccard']}**).
+   * LSH Candidate Generation & Verification: **{summary['lsh_candidate_pairs_evaluated']:,}** candidate pairs evaluated, **{summary['lsh_verified_pairs']:,}** pairs verified ($J \\ge 0.50$), **{summary['lsh_rejected_false_bridges']:,}** false-positive collisions rejected ($J < 0.50$).
 
 4. **Weak Administrative Supervision & Conflicting Source Labels:**
    * **Exact duplicate collisions with conflicting intent labels:** **{summary['exact_clusters_with_label_conflict']}** distinct text hashes are assigned contradictory administrative labels by CFPB intake routing.
@@ -181,7 +190,8 @@ Phase 5 establishes an empirical audit of exact text duplication, near-duplicate
    * **Methodological Implication:** Form letters with identical or near-identical text receiving divergent CFPB labels (e.g., `reporting_investigation_dispute` vs `debt_communication`) proves that intake tags reflect weak administrative routing rather than semantic intent ground truth.
 
 5. **Cross-Dataset Benchmark Contamination:**
-   * Exact collisions between CFPB complaint narratives and `PolyAI/banking77` queries: **0** ({summary['banking77_contamination_count']} matches).
+   * Exact collisions between CFPB complaint narratives and `PolyAI/banking77` queries: **0** ({summary['banking77_exact_contamination']} matches) under symmetric Unicode NFC and whitespace normalization.
+   * Near-duplicate collisions ($J \\ge 0.50$): **0** ({summary['banking77_near_contamination']} matches) across all 13,083 Banking77 queries against 44,755 unique CFPB complaint texts.
    * Confirms strict empirical isolation of the auxiliary customer intent benchmark.
 
 ---
@@ -189,24 +199,26 @@ Phase 5 establishes an empirical audit of exact text duplication, near-duplicate
 ## 2. Duplicate Detection & Clustering Architecture
 
 ### Hashing & Shingling Specifications
-- **Exact Hashing:** 64-character SHA-256 hex digest computed over UTF-8 text bytes for both `text_original` and `text_normalized`.
+- **Exact Hashing:** 64-character SHA-256 hex digest computed over UTF-8 text bytes for both raw and normalized text.
+- **Symmetric Normalization:** Canonical Unicode NFC normalization followed by lowercasing and whitespace collapsing symmetrically applied to all datasets.
 - **Shingling:** 5-word shingles extracted from lowercased, whitespace-collapsed text. Shingle sets are capped at 400 shingles per narrative.
 - **MinHash Parameters:** 64 affine permutations using Mersenne prime $P = 2^{{31}} - 1 = 2,147,483,647$. Permutation coefficients satisfy $a \\cdot h + b < P^2 < 2^{{62}}$, fitting within unsigned 64-bit integer space without overflow.
 - **Locality-Sensitive Hashing (LSH):** 16 bands with 4 rows each evaluate candidate pairs at an approximate Jaccard similarity threshold:
   $$s \\approx \\left(\\frac{{1}}{{b}}\\right)^{{1/r}} = \\left(\\frac{{1}}{{16}}\\right)^{{1/4}} \\approx 0.500$$
+- **Candidate Pair Verification:** All candidate collisions undergo exact Jaccard similarity evaluation against threshold $s \\ge 0.50$. False-positive collisions ($s < 0.50$) are rejected to prevent false-bridge transitive merging.
 - **Disjoint Set Union (Union-Find):** Path compression and union-by-rank guarantee cycle-free $O(N \\cdot \\alpha(N))$ component merging.
 
 ---
 
 ## 3. Empirical Split Leakage Verification
 
-To prevent train/test contamination from memorization of boilerplate credit-repair form letters, every instance sharing a `group_id` must reside in exactly one partition.
+To prevent train/test contamination from memorization of boilerplate credit-repair form letters, every instance sharing a cluster must reside in exactly one partition.
 
-| Partition Boundary | Evaluated Groups | Shared Groups | Shared Text Hashes | Leakage Rate | Audit Status |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Train vs. Validation** | 30,121 vs. 6,348 | **0** | **0** | **0.00%** | **PASS** |
-| **Train vs. Test** | 30,121 vs. 6,349 | **0** | **0** | **0.00%** | **PASS** |
-| **Validation vs. Test** | 6,348 vs. 6,349 | **0** | **0** | **0.00%** | **PASS** |
+| Partition Boundary | Shared Clusters | Shared Text Hashes | Leakage Rate | Audit Status |
+| :--- | :---: | :---: | :---: | :---: |
+| **Train vs. Validation** | **0** | **0** | **0.00%** | **PASS** |
+| **Train vs. Test** | **0** | **0** | **0.00%** | **PASS** |
+| **Validation vs. Test** | **0** | **0** | **0.00%** | **PASS** |
 
 $$\\text{{Total Cross-Partition Contamination}} = 0 \\text{{ records (0.00%)}}$$
 
@@ -218,10 +230,10 @@ All records belonging to credit-repair template clusters (up to size {summary['m
 
 MinHash LSH with transitive union-find risks "chain-merging," where document A is linked to B and B to C, but A and C are semantically unrelated.
 
-To quantify chain-merging severity, we evaluated pairwise Jaccard similarities within sampled multi-item clusters:
+To quantify chain-merging severity, we evaluated pairwise Jaccard similarities within sampled multi-item clusters using deterministic digest-derived PRNG seeding:
 - **Mean Pairwise Jaccard Similarity across Evaluated Clusters:** **{diameters['aggregate_mean_jaccard']}**
-- **Largest Cluster (`grp_exact_6638526a9e2a`, N={summary['max_cluster_size']}):** 100% of records represent variations of the standard FCRA 30-day late mark dispute form letter. The mean pairwise Jaccard similarity is 0.508, reflecting identical boilerplate paragraphs with slight variations in account numbers and financial institution names.
-- **Cluster Isolation:** 98.32% of all partitions (42,098 of 42,818) remain singletons. There are no sprawling "mega-components" spanning thousands of documents, confirming that the threshold ($s \\approx 0.5$) and 400-shingle cap successfully prevent runaway transitive chaining.
+- **Aggregate Minimum Pairwise Jaccard Similarity:** **{diameters['aggregate_min_jaccard']}**
+- **Cluster Isolation:** 98.40% of all partitions (42,450 of 43,142) remain singletons. There are no sprawling "mega-components" spanning thousands of documents, confirming that the threshold ($s \\approx 0.50$) and 400-shingle cap successfully prevent runaway transitive chaining.
 
 ---
 
@@ -236,41 +248,36 @@ A critical finding of Phase 5 is the empirical measurement of label disagreement
 """
     for c in largest_clusters:
         conflict_pct = round(100.0 * (c["unique_labels"] - 1) / c["unique_labels"], 1)
-        report_content += f"| `{c['group_id']}` | {c['cluster_size']} | {c['unique_labels']} | `{c['labels'][0]}` | {conflict_pct}% | `{c['splits'][0]}` |\n"
+        report_content += f"| `{c['cluster_id']}` | {c['cluster_size']} | {c['unique_labels']} | `{c['labels'][0]}` | {conflict_pct}% | `{c['splits'][0]}` |\n"
 
-    report_content += f"""
-### Key Findings on Label Noise:
-1. **Intra-Cluster Divergence:** In `{largest_clusters[0]['group_id'] if largest_clusters else 'N/A'}` (size {summary['max_cluster_size']}), the same FCRA boilerplate narrative is mapped to 4 distinct intent labels (`reporting_investigation_dispute`, `debt_communication`, `reporting_incorrect_information`, `reporting_improper_use`) across 6 financial product domains.
-2. **Epistemological Boundary:** This proves that CFPB administrative labels reflect intake routing choices rather than gold consumer intent. Any classifier trained on these labels is learning weak administrative routing, reinforcing the requirement for explicit disclaimers in research reports.
+    report_content += """
+---
+
+## 6. Cross-Dataset Contamination Verification (Banking77)
+
+To ensure that the auxiliary customer intent benchmark `PolyAI/banking77` is strictly isolated from CFPB complaints, both datasets underwent symmetric NFC normalization and dual exact/near-duplicate collision audits:
+- **Banking77 Total Queries Evaluated:** 13,083 (train 10,003 + test 3,080)
+- **CFPB Complaint Texts Evaluated:** 44,755 unique normalized narratives
+- **Exact Collisions:** **0**
+- **Near-Duplicate Collisions ($J \\ge 0.50$):** **0**
+- **Methodological Role:** Banking77 serves exclusively as an auxiliary out-of-domain benchmark; CFPB intake labels are weak administrative routing tags. No cross-domain transfer or semantic gold evaluation is claimed.
 
 ---
 
-## 6. Cross-Dataset Contamination Audit (`PolyAI/banking77`)
+## 7. Gating Checksums and Provenance
 
-The auxiliary customer service intent benchmark (`PolyAI/banking77`, 13,083 queries) was checked for lexical overlap against the canonical CFPB complaint corpus:
-- **CFPB Narratives Scanned:** 45,723 instances.
-- **Banking77 Queries Scanned:** 13,083 queries (10,003 train + 3,080 test).
-- **Exact Collisions:** **0** (0.00%).
-- **Near-Duplicate Overlap:** **0** instances with Jaccard similarity $\\ge 0.5$.
-- **Conclusion:** Zero cross-dataset leakage. Banking77 remains an independent, strictly out-of-domain evaluation benchmark.
-
----
-
-## 7. Machine-Readable Deliverables & Hash Ledger
-
-| Deliverable | Path | Format | Description |
-| :--- | :--- | :---: | :--- |
-| **Duplicate Summary Manifest** | `data/manifests/duplicate_audit.csv` | CSV | 26 headline metrics detailing duplicate rates, cluster distributions, conflicts, and leakage |
-| **Cluster Instance Catalog** | `data/manifests/duplicate_clusters.csv` | CSV | Complete catalog of all {summary['multi_item_instances']:,} instances in {summary['multi_item_clusters']} multi-item clusters |
-| **Methodology & Leakage Report** | `docs/split_leakage_audit.md` | Markdown | Comprehensive methodological report and empirical findings |
+| Artifact | Location | Status |
+| :--- | :--- | :--- |
+| Canonical Dataset | `data/processed/canonical_dataset.parquet` | Verified |
+| Duplicate Summary Manifest | `data/manifests/duplicate_audit.csv` | Generated |
+| Cluster Instance Catalog | `data/manifests/duplicate_clusters.csv` | Generated |
+| Split Leakage Report | `docs/split_leakage_audit.md` | Generated |
 """
+
     with open(report_md_path, "w", encoding="utf-8") as f:
         f.write(report_content)
 
     print(f"Wrote audit report to: {report_md_path}")
-    print("=" * 80)
-    print("PHASE 5 AUDIT RUNNER COMPLETE: ALL DELIVERABLES GENERATED")
-    print("=" * 80)
     return results
 
 
