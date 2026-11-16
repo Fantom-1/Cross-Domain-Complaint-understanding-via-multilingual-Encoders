@@ -2,7 +2,7 @@ name: CI Verification
 
 on:
   push:
-    branches: [ main, DATA_PREPARATION, phase3-profiling, feature/phase3-profiling, phase4-tokenization, feature/phase4-tokenization ]
+    branches: [ main, DATA_PREPARATION, phase3-profiling, feature/phase3-profiling, phase4-tokenization, feature/phase4-tokenization, phase5-deduplication, feature/phase5-deduplication ]
   pull_request:
     branches: [ main ]
 
@@ -54,3 +54,11 @@ jobs:
       - name: Run Phase 4 Audit
         run: |
           python scripts/audit_phase4.py
+
+      - name: Run Phase 5 Deduplication Tests
+        run: |
+          python -m unittest tests/data/test_phase5_deduplication.py
+
+      - name: Run Phase 5 Audit
+        run: |
+          python scripts/audit_phase5.py
