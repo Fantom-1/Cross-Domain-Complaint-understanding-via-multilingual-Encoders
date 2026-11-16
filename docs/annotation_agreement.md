@@ -1,41 +1,70 @@
-# Phase 6: Label Taxonomy & Human Annotation Validity Report
+# Phase 6: Label Taxonomy Codebook, Mapping Audit & Pilot Protocol Report
 
 **Project:** Cross-Domain Complaint Understanding via Multilingual Encoders  
-**Phase:** Phase 6 (Label Taxonomy and Human-Validity Audit)  
-**Execution Mode:** Empirical Human-Adjudicated Pilot ($N = 320$, Stratified across 16 Intent Classes)  
-**Evaluation Scope:** CFPB Consumer Complaint Database vs. Adjudicated Semantic Gold  
+**Phase:** Phase 6 (Label Taxonomy Codebook, Source Mapping Audit, and Annotation Protocol)  
+**Status:** **PROTOCOL SPECIFICATION & SYNTHETIC SIMULATION BENCHMARK (NON-HUMAN)**  
+**Target Sample Size ($N$):** **320** Stratified Instances across 16 Classes  
 
 ---
 
-> [!IMPORTANT]
-> **Core Empirical Finding & Governance Boundary:**  
-> This audit provides empirical confirmation that **CFPB administrative routing labels are weak supervision tags**, diverging from adjudicated semantic gold intent in **40.6%** of sampled narratives (130 of 320).  
-> Auxiliary out-of-domain benchmark `PolyAI/banking77` represents atomic conversational queries and remains strictly isolated from in-domain CFPB training.
+> [!CAUTION]
+> **Methodological Provenance Disclosure & Supervision Limitation:**  
+> **No empirical human adjudication has been conducted.**  
+> The metrics presented in Section 3 represent a **synthetic rule-based heuristic simulation** designed to verify pipeline plumbing, blinded instrument generation, and Cohen's Kappa evaluation code. They must **not** be cited as human gold labels or empirical inter-annotator agreement.  
+> As established in `PHASE_A_REVIEW_FINDINGS.md` (Item 3), CFPB administrative metadata fields (`Product`, `Issue`, `Sub-issue`) represent **weak administrative supervision**. Until genuine human adjudication is completed, the Phase A baseline operates strictly under weak administrative labels with explicit disclaimers.  
+> Auxiliary benchmark `PolyAI/banking77` represents short conversational query intents and remains strictly isolated from in-domain CFPB training.
 
 ---
 
-## 1. Executive Summary & Headline Agreement Metrics
+## 1. Stratified Pilot Sampling Design & Exclusivity Invariants
 
-| Metric | Measured Value | Standard Benchmark / Interpretation | Status |
-| :--- | :---: | :--- | :---: |
-| **Pilot Sample Size ($N$)** | **320** | 20 instances per class across 16 closed-set classes | **VERIFIED** |
-| **Inter-Annotator Observed Agreement ($P_o$)** | **97.81%** | Proportion of unanimous independent labels (313/320) | **PASS** |
-| **Inter-Annotator Cohen's Kappa (κ)** | **0.9763** | Substantial agreement (κ ≥ 0.70) under unconstrained narratives | **PASS** |
-| **CFPB Weak vs. Gold Observed Agreement** | **59.38%** | Empirical accuracy of CFPB administrative intake routing (190/320) | **AUDITED** |
-| **CFPB Weak vs. Gold Cohen's Kappa (κ)** | **0.5667** | Moderate alignment; reflects intake picklist routing noise | **AUDITED** |
-| **Administrative Label Divergence Rate** | **40.62%** | Proportion of CFPB metadata tags misaligned with narrative intent | **AUDITED** |
-| **Multi-Issue Prevalence Rate** | **15.00%** | Narratives alleging ≥ 2 distinct substantive consumer harms (48/320) | **AUDITED** |
-| **Ambiguity / Low-Signal Rate** | **0.00%** | Truncated, heavily redacted, or unclassifiable text (0/320) | **BOUNDED** |
+The pilot sample manifest [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) was generated from `canonical_dataset.parquet` under strict multi-dimensional constraints:
+
+1. **Class Balance:** Exactly **20 instances per class** across all 16 intent classes ($N = 320$).
+2. **Domain $\times$ Split Allocation:** Each class strictly allocates:
+   * **`train`:** **14 instances** (70.0% of class sample)
+   * **`validation`:** **3 instances** (15.0% of class sample)
+   * **`test`:** **3 instances** (15.0% of class sample)
+   * **Corpus Totals:** **224 train**, **48 validation**, **48 test** instances.
+3. **Cluster Exclusivity & Leakage Prevention:** Every sampled instance belongs to a **unique `cluster_id`** (verified **320 distinct clusters** across 320 instances). No templated duplicate clusters (such as large credit repair components) can have multiple representatives in the pilot.
+4. **Domain Stratification:** Within each split pool, records are sampled across all available product domains via round-robin allocation.
 
 ---
 
-## 2. Source-to-Taxonomy Rule Collision Audit
+## 2. Blinded Human Annotation Protocol & Instrument Artifacts
 
-In `src/data/map_intents.py`, CFPB intake issues and sub-issues are mapped to the 16 project classes via substring pattern rules. An automated scan of all **221** distinct CFPB `Issue // Sub-issue` pairs revealed that **17** source categories trigger multiple intent patterns across distinct classes.
+To conduct genuine human adjudication in accordance with the maintainer review, independent blinded sheets have been generated:
 
-Because pattern evaluation evaluates classes in static array order, earlier classes in `configs/taxonomy.json` take priority.
+* **Rater 1 Blinded Instrument:** [`data/annotation/rater_1_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_1_blinded_sheet.csv)
+* **Rater 2 Blinded Instrument:** [`data/annotation/rater_2_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_2_blinded_sheet.csv)
+* **Blank Adjudication Template:** [`data/annotation/adjudication_template.csv`](file:///d:/NLP/data/annotation/adjudication_template.csv)
 
-### Illustrative Rule Collision Cases
+### Blinding & Independence Guarantees
+1. Raters receive **only** `pilot_id`, `example_id`, and unconstrained `text_normalized`.
+2. All CFPB metadata (`Product`, `Issue`, `Sub-issue`, `domain`, `split`, and weak intent labels) are **completely stripped**.
+3. Raters annotate independently using [`docs/taxonomy_codebook.md`](file:///d:/NLP/docs/taxonomy_codebook.md).
+4. Submissions are immutable. Adjudication occurs only after both raters lock their sheets.
+
+---
+
+## 3. Synthetic Heuristic Simulation (Pipeline Demonstration Only)
+
+To test the evaluation pipeline without fabricating human credentials, a synthetic text-heuristic model was executed against `text_normalized` (without access to weak labels). The results are stored in [`data/manifests/synthetic_pilot_simulation.csv`](file:///d:/NLP/data/manifests/synthetic_pilot_simulation.csv):
+
+| Metric | Synthetic Simulation Value | Note / Interpretation |
+| :--- | :---: | :--- |
+| **Provenance Tag** | `synthetic_rule_simulation` | **Non-human software pipeline test** |
+| **Simulated Rater Agreement ($P_o$)** | **99.38%** | Heuristic consistency test (318/320) |
+| **Simulated Cohen's Kappa (κ)** | **0.9915** | Automated rule convergence benchmark |
+| **Weak CFPB vs. Simulated Divergence** | **84.38%** | Demonstrates potential misalignment (270/320) |
+| **Multi-Issue Prevalence** | **14.69%** | Simulated detection of multi-claim narratives (47/320) |
+| **Ambiguity Rate** | **0.00%** | Narratives under length/intelligibility threshold |
+
+---
+
+## 4. CFPB Source-to-Taxonomy Rule Collision Audit
+
+An automated audit of all **221** distinct CFPB `Issue // Sub-issue` pairs in [`data/manifests/source_label_mapping.csv`](file:///d:/NLP/data/manifests/source_label_mapping.csv) revealed **17** categories triggering multiple competing intent patterns:
 
 | CFPB Source Issue // Sub-issue | Statically Assigned Class | Competing Matched Classes & Patterns |
 | :--- | :--- | :--- |
@@ -48,54 +77,14 @@ Because pattern evaluation evaluates classes in static array order, earlier clas
 | `Getting a credit card // Card opened as result of identity theft or fraud` | `fraud_or_scam` | `fraud_or_scam` ('identity theft'), `application_problem` ('getting a credit card') |
 | `Getting a loan // Confusing or misleading advertising` | `application_problem` | `application_problem` ('getting a loan'), `credit_terms_dispute` ('confusing or misleading advertising') |
 
-**Mitigation & Governance:** All 221 mappings in `data/manifests/source_label_mapping.csv` are audited and frozen for the Phase A baseline. For subsequent model training, researchers must document that source routing maps represent weak heuristic supervision.
-
----
-
-## 3. Class-by-Class Performance of CFPB Weak Labels vs. Adjudicated Gold
-
-When treating human-adjudicated labels as gold reference, the performance of the raw CFPB administrative picklist tags is summarized below:
-
-| Intent Class | Support (Gold) | Precision | Recall | F1-Score |
-| :--- | :---: | :---: | :---: | :---: |
-| `account_access` | 13 | 0.550 | 0.846 | 0.667 |
-| `account_management` | 8 | 0.400 | 1.000 | 0.571 |
-| `application_problem` | 21 | 0.500 | 0.476 | 0.488 |
-| `closing_process` | 12 | 0.350 | 0.583 | 0.438 |
-| `credit_terms_dispute` | 19 | 0.600 | 0.632 | 0.615 |
-| `debt_communication` | 10 | 0.450 | 0.900 | 0.600 |
-| `debt_not_owed` | 28 | 0.750 | 0.536 | 0.625 |
-| `debt_threats` | 32 | 0.650 | 0.406 | 0.500 |
-| `fraud_or_scam` | 23 | 0.700 | 0.609 | 0.651 |
-| `funds_availability` | 17 | 0.850 | 1.000 | 0.919 |
-| `payment_problem` | 13 | 0.550 | 0.846 | 0.667 |
-| `reporting_improper_use` | 18 | 0.600 | 0.667 | 0.632 |
-| `reporting_incorrect_information` | 19 | 0.650 | 0.684 | 0.667 |
-| `reporting_investigation_dispute` | 48 | 0.800 | 0.333 | 0.471 |
-| `servicing_dispute` | 17 | 0.450 | 0.529 | 0.486 |
-| `transaction_problem` | 22 | 0.650 | 0.591 | 0.619 |
-
-### Systematic Divergence Modes Identified
-
-1. **Credit Repair & Statutory Investigation Misrouting:**
-   Consumers complaining of failure by credit bureaus to investigate disputes within 30 days are frequently tagged administratively under generic `Incorrect information on your report`. Semantically, these represent `reporting_investigation_dispute` under the Fair Credit Reporting Act (FCRA).
-2. **Identity Theft vs. Inquiries:**
-   Consumers experiencing criminal identity theft often focus on fraudulent credit inquiries, causing bureau intake to tag the complaint as `improper use of your report` (`reporting_improper_use`). Adjudication reclassifies criminal identity theft to `fraud_or_scam` per Codebook Priority Rule 2.
-3. **Debt Collection Billing vs. Unauthorized Debits:**
-   Disputes where a collector or servicer debited a checking account without authorization are tagged under `credit_terms_dispute` or `account_management` rather than `payment_problem`.
-
----
-
-## 4. Multi-Issue and Ambiguity Analysis
-
-* **Multi-Issue Complexity:** **15.0%** of sampled narratives contain multiple distinct legal allegations. The Codebook Priority Hierarchy successfully resolved all multi-issue instances by isolating the primary actionable harm while recording secondary claims.
-* **Ambiguity Boundaries:** Only **0.0%** of narratives exhibited severe redaction or lack of factual substantiation, well within the project tolerance (< 5.0%).
+**Impact on Baseline:** Because pattern matching evaluates classes in static array order, earlier classes in `configs/taxonomy.json` shadow later classes. This reinforces that CFPB-derived labels are weak supervisory signals requiring explicit disclaimer.
 
 ---
 
 ## 5. Artifact Reference & Release Binding
 
 * **Annotation Codebook:** [`docs/taxonomy_codebook.md`](file:///d:/NLP/docs/taxonomy_codebook.md)
-* **Stratified Sampling Manifest:** [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) ($N = 320$)
-* **Full Adjudication Log:** [`data/manifests/adjudication_log.csv`](file:///d:/NLP/data/manifests/adjudication_log.csv) ($N = 320$, 15 columns)
-* **Source Label Mapping:** [`data/manifests/source_label_mapping.csv`](file:///d:/NLP/data/manifests/source_label_mapping.csv) (221 mappings, 17 multi-match cases documented)
+* **Sampling Manifest:** [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) ($N = 320$, 224 train / 48 val / 48 test, 320 unique clusters)
+* **Blinded Rater Sheets:** [`data/annotation/rater_1_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_1_blinded_sheet.csv), [`data/annotation/rater_2_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_2_blinded_sheet.csv)
+* **Adjudication Template:** [`data/annotation/adjudication_template.csv`](file:///d:/NLP/data/annotation/adjudication_template.csv)
+* **Synthetic Simulation Artifact:** [`data/manifests/synthetic_pilot_simulation.csv`](file:///d:/NLP/data/manifests/synthetic_pilot_simulation.csv)

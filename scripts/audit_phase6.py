@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Automated Phase 6 Audit & Verification Gate: Label Taxonomy Codebook & Pilot Adjudication.
+"""Automated Phase 6 Audit & Verification Gate: Label Taxonomy Codebook, Mapping Audit & Pilot Protocol.
 
 Gating Invariants:
 1. Environment & Storage Preflight: confirms workspace volume and >=10 GB free space.
@@ -8,24 +8,25 @@ Gating Invariants:
    - Taxonomy config JSON (configs/taxonomy.json).
    - Source label mapping CSV (data/manifests/source_label_mapping.csv).
 3. Taxonomy Codebook & Schema Invariants:
-   - docs/taxonomy_codebook.md exists and documents all 16 target classes.
-   - Contains positive inclusion and negative exclusion rules.
-   - Contains confusable pairs priority resolution table.
-   - Contains multi-issue policy and ambiguity/abstention guidelines.
+   - docs/taxonomy_codebook.md documents all 16 target classes.
+   - Contains positive inclusions, negative exclusions, confusable pair priority table,
+     multi-issue policy, and ambiguity/abstention guidelines.
 4. Source Mapping & Pattern Collision Audit:
    - Exactly 221 CFPB source mappings (198 mapped, 23 unmapped).
-   - Automated collision detection verifies exactly 17 multi-pattern collision cases.
-5. Stratified Pilot Sampling & Adjudication Invariants:
+   - Automated collision detection verifies exactly 17 multi-pattern collision categories.
+5. Stratified Pilot Sampling & Dedup Cluster Exclusivity:
    - data/manifests/label_pilot_sampling_manifest.csv: exactly 320 records (20 per class).
-   - data/manifests/adjudication_log.csv: exactly 320 rows, 15 columns, zero nulls.
-   - All labels belong to the 16-class taxonomy.
-6. Inter-Annotator Agreement & Empirical Divergence Metrics:
-   - Inter-annotator observed agreement Po >= 90.0% and Cohen's Kappa >= 0.70.
-   - Weak CFPB vs. Gold divergence empirically measured and bounded.
-   - Multi-issue rate >= 10.0% and ambiguity rate < 5.0%.
+   - Strict split quotas: exactly 224 train (14/class), 48 validation (3/class), 48 test (3/class).
+   - Strict cluster exclusivity: exactly 320 unique cluster_ids (zero near-duplicate template leakage).
+6. Blinded Annotation Instruments & Provenance Gate:
+   - Blinded sheets exist for Rater 1 and Rater 2, completely stripping CFPB metadata.
+   - Blank adjudication template verified.
+   - Provenance gate: verifies that synthetic simulation is strictly tagged with
+     'synthetic_rule_simulation', disallowing fabricated human claims.
 7. Governance Disclaimers & Exact Headline Reconciliation:
-   - Weak administrative label and auxiliary benchmark disclosures verified.
-   - Exact reconciliation of all headline metrics between markdown report and manifests.
+   - Explicit disclosure that empirical human adjudication has not yet occurred.
+   - Weak administrative routing and auxiliary benchmark disclosures verified.
+   - Exact reconciliation of all sampling headline metrics.
 8. Unit Test Suite Execution:
    - Runs test_phase6_taxonomy.py and regression test suites across Phases 1–5.
 9. Emits captured snapshot report: docs/phase6_taxonomy_audit.md.
@@ -54,11 +55,15 @@ DOCS_DIR = os.path.join(REPO_ROOT, "docs")
 SRC_DIR = os.path.join(REPO_ROOT, "src", "data")
 DATA_DIR = os.path.join(REPO_ROOT, "data")
 CONFIGS_DIR = os.path.join(REPO_ROOT, "configs")
+ANNOTATION_DIR = os.path.join(DATA_DIR, "annotation")
 
 TAXONOMY_JSON = os.path.join(CONFIGS_DIR, "taxonomy.json")
 SOURCE_MAPPING_CSV = os.path.join(MANIFEST_DIR, "source_label_mapping.csv")
 PILOT_SAMPLING_CSV = os.path.join(MANIFEST_DIR, "label_pilot_sampling_manifest.csv")
-ADJUDICATION_LOG_CSV = os.path.join(MANIFEST_DIR, "adjudication_log.csv")
+RATER_1_SHEET_CSV = os.path.join(ANNOTATION_DIR, "rater_1_blinded_sheet.csv")
+RATER_2_SHEET_CSV = os.path.join(ANNOTATION_DIR, "rater_2_blinded_sheet.csv")
+ADJUDICATION_TMPL_CSV = os.path.join(ANNOTATION_DIR, "adjudication_template.csv")
+SYNTHETIC_SIM_CSV = os.path.join(MANIFEST_DIR, "synthetic_pilot_simulation.csv")
 TAXONOMY_CODEBOOK_MD = os.path.join(DOCS_DIR, "taxonomy_codebook.md")
 ANNOTATION_AGREEMENT_MD = os.path.join(DOCS_DIR, "annotation_agreement.md")
 AUDIT_REPORT_PATH = os.path.join(DOCS_DIR, "phase6_taxonomy_audit.md")
@@ -70,25 +75,24 @@ EXPECTED_TOTAL_MAPPINGS = 221
 EXPECTED_MAPPED_COUNT = 198
 EXPECTED_UNMAPPED_COUNT = 23
 EXPECTED_COLLISION_COUNT = 17
+
 EXPECTED_PILOT_SIZE = 320
 EXPECTED_PILOT_PER_CLASS = 20
+EXPECTED_PILOT_TRAIN = 224
+EXPECTED_PILOT_VAL = 48
+EXPECTED_PILOT_TEST = 48
+EXPECTED_PILOT_UNIQUE_CLUSTERS = 320
 
-EXPECTED_ADJUDICATION_COLUMNS = [
+EXPECTED_BLINDED_COLUMNS = [
     "pilot_id",
     "example_id",
-    "domain",
-    "split",
-    "weak_cfpb_label",
-    "annotator_1_label",
-    "annotator_2_label",
-    "raw_agreement",
-    "adjudicated_label",
-    "adjudication_status",
+    "text_normalized",
+    "annotator_label",
+    "confidence_1_to_5",
     "secondary_labels",
     "multi_issue_flag",
     "ambiguity_flag",
-    "adjudication_notes",
-    "text_sample",
+    "rationale",
 ]
 
 
@@ -136,7 +140,7 @@ def _run_phase6_audit_internal(
             pillar_status[pillar] = False
 
     print("=" * 80)
-    print("PHASE 6 AUDIT: LABEL TAXONOMY CODEBOOK & PILOT ADJUDICATION")
+    print("PHASE 6 AUDIT: LABEL TAXONOMY CODEBOOK, MAPPING AUDIT & PILOT PROTOCOL")
     print(f"Timestamp: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
     print("Repository Root: . (Repo-Relative)")
     print("=" * 80)
@@ -207,7 +211,6 @@ def _run_phase6_audit_internal(
                 with open(TAXONOMY_CODEBOOK_MD, "r", encoding="utf-8") as f:
                     codebook_text = f.read()
 
-                # Verify all 16 intent classes are documented
                 missing_classes = []
                 with open(TAXONOMY_JSON, "r", encoding="utf-8") as f:
                     tax_data = json.load(f)
@@ -221,7 +224,6 @@ def _run_phase6_audit_internal(
                 else:
                     log("Codebook documents all 16 target classes with definitions and boundary rules.", status="PASS", pillar=3)
 
-                # Check required sections
                 req_sections = [
                     "Positive Inclusions",
                     "Negative Exclusions",
@@ -264,10 +266,9 @@ def _run_phase6_audit_internal(
             log(f"Pillar 4 collision audit error: {e}", status="FAIL", pillar=4)
 
     # -------------------------------------------------------------------------
-    # Pillar 5: Stratified Pilot Sampling & Adjudication Invariants
+    # Pillar 5: Stratified Pilot Sampling & Dedup Cluster Exclusivity
     # -------------------------------------------------------------------------
-    log("Starting Pillar 5: Stratified Pilot Sampling & Adjudication Invariants...", "INFO", 5)
-    adj_stats: Dict[str, Any] = {}
+    log("Starting Pillar 5: Stratified Pilot Sampling & Dedup Cluster Exclusivity...", "INFO", 5)
     if force_pillar_fail == 5:
         log("Injected failure for Pillar 5", status="FAIL", pillar=5)
     else:
@@ -277,67 +278,75 @@ def _run_phase6_audit_internal(
             else:
                 with open(PILOT_SAMPLING_CSV, "r", encoding="utf-8") as f:
                     pilot_rows = list(csv.DictReader(f))
+
+                cls_counts = collections.Counter(r["weak_cfpb_label"] for r in pilot_rows)
+                split_counts = collections.Counter(r["split"] for r in pilot_rows)
+                unique_clusters = len(set(r["cluster_id"] for r in pilot_rows))
+
                 if len(pilot_rows) != EXPECTED_PILOT_SIZE:
-                    log(f"Pilot sampling manifest size mismatch: got {len(pilot_rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=5)
+                    log(f"Pilot manifest size mismatch: got {len(pilot_rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=5)
+                elif len(cls_counts) != EXPECTED_CLASS_COUNT or any(c != EXPECTED_PILOT_PER_CLASS for c in cls_counts.values()):
+                    log(f"Pilot class stratification mismatch: {cls_counts}", status="FAIL", pillar=5)
+                elif split_counts.get("train", 0) != EXPECTED_PILOT_TRAIN or split_counts.get("validation", 0) != EXPECTED_PILOT_VAL or split_counts.get("test", 0) != EXPECTED_PILOT_TEST:
+                    log(f"Pilot split quota mismatch: got {split_counts}, expected train={EXPECTED_PILOT_TRAIN}, val={EXPECTED_PILOT_VAL}, test={EXPECTED_PILOT_TEST}", status="FAIL", pillar=5)
+                elif unique_clusters != EXPECTED_PILOT_UNIQUE_CLUSTERS:
+                    log(f"Pilot cluster exclusivity violation: got {unique_clusters} unique clusters, expected {EXPECTED_PILOT_UNIQUE_CLUSTERS}", status="FAIL", pillar=5)
                 else:
-                    cls_counts = collections.Counter(r["weak_cfpb_label"] for r in pilot_rows)
-                    if len(cls_counts) != EXPECTED_CLASS_COUNT or any(c != EXPECTED_PILOT_PER_CLASS for c in cls_counts.values()):
-                        log(f"Pilot sampling stratification error: {cls_counts}", status="FAIL", pillar=5)
-                    else:
-                        log(f"Pilot sampling manifest verified: exactly {EXPECTED_PILOT_SIZE} records (20 per class across 16 classes).", status="PASS", pillar=5)
-
-            if not os.path.exists(ADJUDICATION_LOG_CSV):
-                log(f"Adjudication log CSV missing: {ADJUDICATION_LOG_CSV}", status="FAIL", pillar=5)
-            else:
-                with open(ADJUDICATION_LOG_CSV, "r", encoding="utf-8") as f:
-                    adj_rows = list(csv.DictReader(f))
-                if len(adj_rows) != EXPECTED_PILOT_SIZE:
-                    log(f"Adjudication log size mismatch: got {len(adj_rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=5)
-                elif list(adj_rows[0].keys()) != EXPECTED_ADJUDICATION_COLUMNS:
-                    log(f"Adjudication log column mismatch: got {list(adj_rows[0].keys())}", status="FAIL", pillar=5)
-                else:
-                    from src.data.taxonomy_auditor import TaxonomyAuditor
-                    auditor = TaxonomyAuditor()
-                    adj_stats = auditor.analyze_adjudication_log(ADJUDICATION_LOG_CSV)
-                    log(f"Adjudication log verified: {len(adj_rows)} records, 15 columns, zero nulls.", status="PASS", pillar=5)
+                    log(f"Pilot sampling manifest verified: exactly {EXPECTED_PILOT_SIZE} records (20/class, 14 train / 3 val / 3 test per class, 320 distinct clusters).", status="PASS", pillar=5)
         except Exception as e:
-            log(f"Pillar 5 pilot adjudication error: {e}", status="FAIL", pillar=5)
+            log(f"Pillar 5 sampling manifest error: {e}", status="FAIL", pillar=5)
 
     # -------------------------------------------------------------------------
-    # Pillar 6: Inter-Annotator Agreement & Empirical Divergence Metrics
+    # Pillar 6: Blinded Annotation Instruments & Provenance Gate
     # -------------------------------------------------------------------------
-    log("Starting Pillar 6: Inter-Annotator Agreement & Empirical Divergence Metrics...", "INFO", 6)
+    log("Starting Pillar 6: Blinded Annotation Instruments & Provenance Gate...", "INFO", 6)
     if force_pillar_fail == 6:
         log("Injected failure for Pillar 6", status="FAIL", pillar=6)
     else:
         try:
-            if not adj_stats:
-                from src.data.taxonomy_auditor import TaxonomyAuditor
-                auditor = TaxonomyAuditor()
-                adj_stats = auditor.analyze_adjudication_log(ADJUDICATION_LOG_CSV)
-
-            raw_agree = adj_stats.get("raw_inter_annotator_agreement", 0.0)
-            kappa_ann = adj_stats.get("cohens_kappa_inter_annotator", 0.0)
-            div_rate = adj_stats.get("divergence_rate", 0.0)
-            multi_rate = adj_stats.get("multi_issue_rate", 0.0)
-            ambig_rate = adj_stats.get("ambiguous_rate", 1.0)
-
-            if raw_agree < 0.90:
-                log(f"Inter-annotator agreement too low: {raw_agree:.4f} (< 0.90 threshold)", status="FAIL", pillar=6)
-            elif kappa_ann < 0.70:
-                log(f"Inter-annotator Cohen's Kappa too low: {kappa_ann:.4f} (< 0.70 threshold)", status="FAIL", pillar=6)
-            elif div_rate <= 0.0:
-                log("Empirical divergence rate must be positive (CFPB labels are weak supervision)", status="FAIL", pillar=6)
-            elif multi_rate < 0.10:
-                log(f"Multi-issue rate lower than realistic bound: {multi_rate:.4f} (< 0.10)", status="FAIL", pillar=6)
-            elif ambig_rate > 0.05:
-                log(f"Ambiguity rate exceeded tolerance: {ambig_rate:.4f} (> 0.05)", status="FAIL", pillar=6)
+            # Check blinded sheets exist
+            for sheet_name, sheet_path in [("Rater 1 Sheet", RATER_1_SHEET_CSV), ("Rater 2 Sheet", RATER_2_SHEET_CSV)]:
+                if not os.path.exists(sheet_path):
+                    log(f"Blinded instrument missing: {sheet_name} ({sheet_path})", status="FAIL", pillar=6)
+                    break
+                with open(sheet_path, "r", encoding="utf-8") as f:
+                    rows = list(csv.DictReader(f))
+                if len(rows) != EXPECTED_PILOT_SIZE:
+                    log(f"{sheet_name} size mismatch: got {len(rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=6)
+                    break
+                if list(rows[0].keys()) != EXPECTED_BLINDED_COLUMNS:
+                    log(f"{sheet_name} column mismatch: got {list(rows[0].keys())}", status="FAIL", pillar=6)
+                    break
+                # Verify complete blinding: blank annotator fields, no weak labels
+                leaked_metadata = any(
+                    "weak_cfpb_label" in r or "source_label" in r or "domain" in r or "split" in r
+                    for r in rows
+                )
+                if leaked_metadata:
+                    log(f"{sheet_name} leaks CFPB metadata into blinded instrument!", status="FAIL", pillar=6)
+                    break
             else:
-                log(f"Agreement metrics verified: Inter-annotator Po = {raw_agree*100:.2f}%, Kappa = {kappa_ann:.4f}.", status="PASS", pillar=6)
-                log(f"Empirical divergence confirmed: {div_rate*100:.2f}% CFPB labels misaligned with gold intent.", status="PASS", pillar=6)
-                log(f"Multi-issue prevalence: {multi_rate*100:.2f}%, Ambiguity rate: {ambig_rate*100:.2f}%.", status="PASS", pillar=6)
+                log("Blinded annotation instruments verified: Rater 1 & Rater 2 sheets strip all CFPB metadata.", status="PASS", pillar=6)
+
+            # Check blank adjudication template
+            if not os.path.exists(ADJUDICATION_TMPL_CSV):
+                log(f"Adjudication template missing: {ADJUDICATION_TMPL_CSV}", status="FAIL", pillar=6)
+            else:
+                log("Blank adjudication template verified.", status="PASS", pillar=6)
+
+            # Provenance gate: verify synthetic simulation is explicitly tagged as synthetic
+            if not os.path.exists(SYNTHETIC_SIM_CSV):
+                log(f"Synthetic simulation manifest missing: {SYNTHETIC_SIM_CSV}", status="FAIL", pillar=6)
+            else:
+                with open(SYNTHETIC_SIM_CSV, "r", encoding="utf-8") as f:
+                    sim_rows = list(csv.DictReader(f))
+                provs = set(r.get("provenance") for r in sim_rows)
+                if provs != {"synthetic_rule_simulation"}:
+                    log(f"Simulation file must be tagged strictly with 'synthetic_rule_simulation', got: {provs}", status="FAIL", pillar=6)
+                else:
+                    log("Provenance gate confirmed: simulation artifact explicitly marked 'synthetic_rule_simulation' (no fabricated human claims).", status="PASS", pillar=6)
         except Exception as e:
-            log(f"Pillar 6 agreement error: {e}", status="FAIL", pillar=6)
+            log(f"Pillar 6 provenance error: {e}", status="FAIL", pillar=6)
 
     # -------------------------------------------------------------------------
     # Pillar 7: Governance Disclaimers & Exact Headline Reconciliation
@@ -348,27 +357,21 @@ def _run_phase6_audit_internal(
     else:
         try:
             if not os.path.exists(ANNOTATION_AGREEMENT_MD):
-                log(f"Annotation agreement report missing: {ANNOTATION_AGREEMENT_MD}", status="FAIL", pillar=7)
+                log(f"Protocol report missing: {ANNOTATION_AGREEMENT_MD}", status="FAIL", pillar=7)
             else:
                 with open(ANNOTATION_AGREEMENT_MD, "r", encoding="utf-8") as f:
                     rep_text = f.read()
 
-                # Check governance notices
-                if "CFPB administrative routing labels are weak supervision tags" not in rep_text:
+                if "No empirical human adjudication has been conducted" not in rep_text:
+                    log("Report missing non-human synthetic simulation disclosure.", status="FAIL", pillar=7)
+                elif "weak administrative supervision" not in rep_text:
                     log("Report missing weak administrative supervision notice.", status="FAIL", pillar=7)
                 elif "PolyAI/banking77" not in rep_text or "strictly isolated" not in rep_text:
                     log("Report missing auxiliary Banking77 classification notice.", status="FAIL", pillar=7)
-                else:
-                    log("Governance notices verified in annotation agreement report.", status="PASS", pillar=7)
-
-                # Reconcile exact headline numbers
-                p_pilot_match = f"**{EXPECTED_PILOT_SIZE}**" in rep_text
-                div_cnt = adj_stats.get("divergence_count", -1)
-                p_div_match = f"{div_cnt} of {EXPECTED_PILOT_SIZE}" in rep_text
-                if not p_pilot_match or not p_div_match:
+                elif (f"**{EXPECTED_PILOT_SIZE}**" not in rep_text and f"($N = {EXPECTED_PILOT_SIZE}$)" not in rep_text) or f"**{EXPECTED_PILOT_TRAIN} train**" not in rep_text:
                     log("Headline numbers reconciliation failed between manifest and markdown report.", status="FAIL", pillar=7)
                 else:
-                    log("Headline metrics reconciled exactly between manifests and report.", status="PASS", pillar=7)
+                    log("Governance notices and exact headline metrics reconciled in protocol report.", status="PASS", pillar=7)
         except Exception as e:
             log(f"Pillar 7 governance reconciliation error: {e}", status="FAIL", pillar=7)
 
@@ -412,22 +415,13 @@ def _run_phase6_audit_internal(
     overall_passed = all(pillar_status.values())
     overall_status_str = "PASSED" if overall_passed else "FAILED"
 
-    raw_agree_val = adj_stats.get("raw_inter_annotator_agreement", 0.0)
-    kappa_ann_val = adj_stats.get("cohens_kappa_inter_annotator", 0.0)
-    weak_gold_val = adj_stats.get("raw_weak_vs_gold_agreement", 0.0)
-    kappa_wg_val = adj_stats.get("cohens_kappa_weak_vs_gold", 0.0)
-    div_cnt_val = adj_stats.get("divergence_count", 0)
-    div_pct_val = adj_stats.get("divergence_rate", 0.0) * 100
-    multi_cnt_val = adj_stats.get("multi_issue_count", 0)
-    ambig_cnt_val = adj_stats.get("ambiguous_count", 0)
-
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    snapshot_content = f"""# Automated Phase 6 Label Taxonomy & Human Annotation Audit Report
+    snapshot_content = f"""# Automated Phase 6 Label Taxonomy & Protocol Audit Report
 
 **Generated:** {now_iso}  
 **Execution Mode:** **Captured Local Workstation Snapshot** (Full Cryptographic Source-File & Manifest Verification)  
 **Repository Root:** `.` (Repo-Relative)  
-**Audit Target:** Phase 6 Label Taxonomy & Pilot Adjudication (`docs/taxonomy_codebook.md`, `data/manifests/source_label_mapping.csv`, `data/manifests/label_pilot_sampling_manifest.csv`, `data/manifests/adjudication_log.csv`, `docs/annotation_agreement.md`)  
+**Audit Target:** Phase 6 Label Taxonomy Codebook, Mapping Audit & Annotation Protocol (`docs/taxonomy_codebook.md`, `data/manifests/source_label_mapping.csv`, `data/manifests/label_pilot_sampling_manifest.csv`, `data/annotation/rater_1_blinded_sheet.csv`, `data/annotation/rater_2_blinded_sheet.csv`, `data/manifests/synthetic_pilot_simulation.csv`, `docs/annotation_agreement.md`)  
 **Audit Status:** **{overall_status_str}**  
 
 ---
@@ -440,9 +434,9 @@ def _run_phase6_audit_internal(
 | **Pillar 2** | Dataset Provenance & File Checksums | **{'PASS' if pillar_status[2] else 'FAIL'}** | Canonical parquet SHA-256 (`b591ba98...`), taxonomy JSON, source mapping manifest |
 | **Pillar 3** | Taxonomy Codebook & Schema Invariants | **{'PASS' if pillar_status[3] else 'FAIL'}** | 16 classes documented with positive inclusions, negative exclusions, and multi-issue policy |
 | **Pillar 4** | Source Mapping & Collision Audit | **{'PASS' if pillar_status[4] else 'FAIL'}** | 221 CFPB mappings (198 mapped, 23 unmapped, 17 multi-match collisions audited) |
-| **Pillar 5** | Stratified Pilot Sampling & Manifests | **{'PASS' if pillar_status[5] else 'FAIL'}** | Exactly 320 records (20 per class), 15 columns, zero nulls in adjudication log |
-| **Pillar 6** | Agreement & Empirical Divergence | **{'PASS' if pillar_status[6] else 'FAIL'}** | Inter-annotator Po >= 90%, Kappa >= 0.70, empirical divergence confirmed ({div_cnt_val}/320) |
-| **Pillar 7** | Governance & Exact Reconciliation | **{'PASS' if pillar_status[7] else 'FAIL'}** | Weak administrative routing disclosures, auxiliary benchmark status, exact metric match |
+| **Pillar 5** | Stratified Sampling & Dedup Invariants | **{'PASS' if pillar_status[5] else 'FAIL'}** | Exactly 320 records (20/class, 14 train / 3 val / 3 test per class, 320 unique clusters) |
+| **Pillar 6** | Blinded Instruments & Provenance Gate | **{'PASS' if pillar_status[6] else 'FAIL'}** | Blinded Rater 1 & 2 sheets strip metadata; simulation tagged 'synthetic_rule_simulation' |
+| **Pillar 7** | Governance & Exact Reconciliation | **{'PASS' if pillar_status[7] else 'FAIL'}** | Non-human simulation disclosure, weak supervision notices, exact metric match |
 | **Pillar 8** | Unit Test Suite Execution | **{'PASS' if pillar_status[8] else 'FAIL'}** | Regression test suites pass with 0 failures across Phases 1–6 |
 
 ---
@@ -454,12 +448,10 @@ def _run_phase6_audit_internal(
 * **CFPB Source Mappings Audited:** {EXPECTED_TOTAL_MAPPINGS} categories ({EXPECTED_MAPPED_COUNT} mapped, {EXPECTED_UNMAPPED_COUNT} unmapped)
 * **Rule Collisions Documented:** {EXPECTED_COLLISION_COUNT} multi-match patterns across distinct classes
 * **Stratified Pilot Size:** {EXPECTED_PILOT_SIZE} instances (exactly 20 per class across 16 classes)
-* **Inter-Annotator Raw Agreement ($P_o$):** **{raw_agree_val * 100:.2f}%**
-* **Inter-Annotator Cohen's Kappa (κ):** **{kappa_ann_val:.4f}** (Substantial agreement)
-* **Weak CFPB vs. Gold Agreement:** **{weak_gold_val * 100:.2f}%** (Kappa: {kappa_wg_val:.4f})
-* **Administrative Label Divergence:** **{div_cnt_val} of {EXPECTED_PILOT_SIZE} ({div_pct_val:.2f}%)**
-* **Multi-Issue Prevalence:** **{multi_cnt_val} ({multi_cnt_val/EXPECTED_PILOT_SIZE * 100:.2f}%)**
-* **Ambiguity Rate:** **{ambig_cnt_val} ({ambig_cnt_val/EXPECTED_PILOT_SIZE * 100:.2f}%)**
+* **Pilot Split Allocation:** **{EXPECTED_PILOT_TRAIN} train**, **{EXPECTED_PILOT_VAL} validation**, **{EXPECTED_PILOT_TEST} test**
+* **Near-Duplicate Cluster Exclusivity:** **{EXPECTED_PILOT_UNIQUE_CLUSTERS} distinct clusters** across {EXPECTED_PILOT_SIZE} instances (zero template leakage)
+* **Blinded Human Annotation Sheets:** Generated for Rater 1 and Rater 2 with zero CFPB metadata leakage
+* **Adjudication Provenance:** Explicitly tagged as `synthetic_rule_simulation` (no falsified human claims)
 
 ---
 

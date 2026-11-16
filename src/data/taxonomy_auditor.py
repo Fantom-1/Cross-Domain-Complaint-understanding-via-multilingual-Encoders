@@ -4,10 +4,12 @@
 Provides:
 - Taxonomy schema verification and operational codebook consistency.
 - Rule pattern collision and order-dependency audit across CFPB source mappings.
-- Stratified sampling from canonical_dataset.parquet for human annotation pilot (N=320).
-- Inter-annotator agreement metrics: raw agreement, Cohen's Kappa, and confusion matrices.
-- Weak administrative label vs. adjudicated gold label divergence analysis.
-- Multi-issue prevalence and narrative ambiguity tracking.
+- Stratified sampling from canonical_dataset.parquet for pilot annotation (N=320)
+  enforcing strict per-class domain x split quotas (14 train, 3 val, 3 test)
+  and zero near-duplicate cluster re-sampling (320 distinct clusters).
+- Blinded annotation instrument generation for independent human raters.
+- Provenance auditing to distinguish genuine human adjudication from synthetic simulation.
+- Inter-annotator agreement metrics: observed agreement, Cohen's Kappa, and confusion matrices.
 """
 
 import collections
@@ -20,12 +22,20 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 TAXONOMY_PATH = "configs/taxonomy.json"
 SOURCE_MAPPING_PATH = "data/manifests/source_label_mapping.csv"
 CANONICAL_PARQUET_PATH = "data/processed/canonical_dataset.parquet"
+CLUSTERS_CSV_PATH = "data/manifests/duplicate_clusters.csv"
 PILOT_MANIFEST_PATH = "data/manifests/label_pilot_sampling_manifest.csv"
-ADJUDICATION_LOG_PATH = "data/manifests/adjudication_log.csv"
+RATER_1_SHEET_PATH = "data/annotation/rater_1_blinded_sheet.csv"
+RATER_2_SHEET_PATH = "data/annotation/rater_2_blinded_sheet.csv"
+ADJUDICATION_TEMPLATE_PATH = "data/annotation/adjudication_template.csv"
+SYNTHETIC_SIMULATION_PATH = "data/manifests/synthetic_pilot_simulation.csv"
 
 PILOT_TARGET_PER_CLASS = 20
 EXPECTED_CLASS_COUNT = 16
 EXPECTED_PILOT_SIZE = 320  # 16 classes * 20 instances
+SPLIT_QUOTAS = {"train": 14, "validation": 3, "test": 3}
+
+PROVENANCE_HUMAN = "human_adjudicated"
+PROVENANCE_SYNTHETIC = "synthetic_rule_simulation"
 
 
 def load_taxonomy(path: str = TAXONOMY_PATH) -> Dict[str, Any]:
@@ -157,119 +167,243 @@ class TaxonomyAuditor:
     def sample_stratified_pilot(
         self,
         parquet_path: str = CANONICAL_PARQUET_PATH,
-        target_per_class: int = PILOT_TARGET_PER_CLASS,
-        seed: int = 42,
+        clusters_csv_path: Optional[str] = CLUSTERS_CSV_PATH,
+        split_quotas: Optional[Dict[str, int]] = None,
     ) -> List[Dict[str, Any]]:
-        """Samples a deterministic, stratified pilot dataset (N = 16 * target_per_class).
+        """Samples a deterministic, stratified pilot dataset (N = 320).
         
-        Stratified primarily across 16 intent classes, balancing across product domains
-        and dataset splits (train, validation, test) using stable sorting and pseudo-random selection.
+        Enforces:
+        1. Exactly 20 records per class across all 16 classes.
+        2. Strict split quotas per class: 14 train, 3 validation, 3 test (224 train, 48 val, 48 test total).
+        3. Round-robin domain balance within each split pool.
+        4. Near-duplicate cluster exclusivity: at most 1 instance per cluster_id (320 unique clusters).
         """
         import pandas as pd
 
         if not os.path.exists(parquet_path):
             raise FileNotFoundError(f"Canonical dataset not found: {parquet_path}")
 
+        quotas = split_quotas or SPLIT_QUOTAS
+        target_per_class = sum(quotas.values())
+
         df = pd.read_parquet(parquet_path)
 
+        # Load cluster map if available for cluster-exclusive sampling
+        cluster_map: Dict[str, str] = {}
+        if clusters_csv_path and os.path.exists(clusters_csv_path):
+            with open(clusters_csv_path, "r", encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    cluster_map[r["example_id"]] = r["cluster_id"]
+
+        # Assign effective cluster (cluster_id if multi-item, else group_id/hash)
+        effective_clusters = []
+        for eid, gid in zip(df["example_id"], df["group_id"]):
+            effective_clusters.append(cluster_map.get(eid, gid))
+        df["effective_cluster"] = effective_clusters
+
+        # Deterministic sorting
+        if "text_hash" in df.columns:
+            df["sort_key"] = df["text_hash"] + "_" + df["example_id"]
+        else:
+            df["sort_key"] = df["example_id"]
+        df = df.sort_values("sort_key").reset_index(drop=True)
+
+        seen_clusters: Set[str] = set()
         sampled_rows: List[Dict[str, Any]] = []
         pilot_counter = 1
 
         for cls_name in sorted(self.class_names):
-            cls_df = df[df["intent_label"] == cls_name].copy()
-            if len(cls_df) < target_per_class:
-                raise ValueError(
-                    f"Class '{cls_name}' has insufficient records ({len(cls_df)}) for target {target_per_class}"
-                )
+            cls_df = df[df["intent_label"] == cls_name]
+            for split_name, quota in quotas.items():
+                s_df = cls_df[cls_df["split"] == split_name]
+                domains = sorted(s_df["domain"].unique())
+                domain_pools = {d: s_df[s_df["domain"] == d] for d in domains}
 
-            # Deterministic stratified sample across domains & splits
-            # Sort by text_hash + example_id to achieve deterministic ordering
-            cls_df["sort_key"] = cls_df["text_hash"] + "_" + cls_df["example_id"]
-            cls_df = cls_df.sort_values("sort_key").reset_index(drop=True)
+                allocated = 0
+                d_idx = 0
+                max_attempts = len(s_df) * 2
+                attempt = 0
 
-            # Stratify by domain within class using GroupBy or stable deterministic stride
-            # To ensure representation across domains and splits:
-            sampled_indices = []
-            domains = sorted(cls_df["domain"].unique())
-            domain_pools = {d: cls_df[cls_df["domain"] == d].index.tolist() for d in domains}
+                while allocated < quota and attempt < max_attempts:
+                    d = domains[d_idx % len(domains)]
+                    pool = domain_pools[d]
 
-            # Round-robin selection across domains to ensure domain diversity
-            d_idx = 0
-            while len(sampled_indices) < target_per_class:
-                curr_domain = domains[d_idx % len(domains)]
-                pool = domain_pools[curr_domain]
-                if pool:
-                    sampled_indices.append(pool.pop(0))
-                d_idx += 1
+                    for idx, row in pool.iterrows():
+                        cid = row["effective_cluster"]
+                        if cid not in seen_clusters:
+                            seen_clusters.add(cid)
+                            sampled_rows.append({
+                                "pilot_id": f"PILOT_{pilot_counter:03d}",
+                                "example_id": row["example_id"],
+                                "text_normalized": row["text_normalized"],
+                                "domain": row["domain"],
+                                "source_label": row["source_label"],
+                                "weak_cfpb_label": row["intent_label"],
+                                "split": row["split"],
+                                "group_id": row["group_id"],
+                                "cluster_id": cid,
+                            })
+                            pilot_counter += 1
+                            allocated += 1
+                            domain_pools[d] = pool.drop(idx)
+                            break
+                    d_idx += 1
+                    attempt += 1
 
-            cls_sample = cls_df.loc[sampled_indices].copy()
-
-            for _, row in cls_sample.iterrows():
-                sampled_rows.append({
-                    "pilot_id": f"PILOT_{pilot_counter:03d}",
-                    "example_id": row["example_id"],
-                    "text_normalized": row["text_normalized"],
-                    "domain": row["domain"],
-                    "source_label": row["source_label"],
-                    "weak_cfpb_label": row["intent_label"],
-                    "split": row["split"],
-                    "group_id": row["group_id"],
-                })
-                pilot_counter += 1
+                if allocated < quota:
+                    raise ValueError(
+                        f"Unable to fulfill quota for class '{cls_name}' split '{split_name}': allocated {allocated}/{quota}"
+                    )
 
         return sampled_rows
 
-    def analyze_adjudication_log(
-        self, adjudication_csv: str = ADJUDICATION_LOG_PATH
-    ) -> Dict[str, Any]:
-        """Analyzes inter-annotator agreement and weak-to-gold label divergence."""
-        if not os.path.exists(adjudication_csv):
-            raise FileNotFoundError(f"Adjudication log not found: {adjudication_csv}")
+    def generate_blinded_annotation_sheets(
+        self,
+        sampled_rows: List[Dict[str, Any]],
+        output_dir: str = "data/annotation",
+    ) -> Tuple[str, str, str]:
+        """Generates separate blinded annotation sheets for two human raters and an adjudication template.
+        
+        Strictly strips all CFPB metadata (weak_cfpb_label, source_label, domain, split) to guarantee
+        that human raters evaluate narratives completely blind to administrative picklists.
+        """
+        os.makedirs(output_dir, exist_ok=True)
+        r1_path = os.path.join(output_dir, "rater_1_blinded_sheet.csv")
+        r2_path = os.path.join(output_dir, "rater_2_blinded_sheet.csv")
+        adj_tmpl_path = os.path.join(output_dir, "adjudication_template.csv")
 
-        with open(adjudication_csv, "r", encoding="utf-8") as f:
-            rows = list(csv.DictReader(f))
+        # Blinded columns: ONLY text and identification, blank annotation fields
+        blinded_fieldnames = [
+            "pilot_id",
+            "example_id",
+            "text_normalized",
+            "annotator_label",
+            "confidence_1_to_5",
+            "secondary_labels",
+            "multi_issue_flag",
+            "ambiguity_flag",
+            "rationale",
+        ]
 
-        total_instances = len(rows)
-        if total_instances == 0:
-            raise ValueError("Adjudication log is empty")
+        for path in [r1_path, r2_path]:
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                writer = csv.DictWriter(f, fieldnames=blinded_fieldnames)
+                writer.writeheader()
+                for r in sampled_rows:
+                    writer.writerow({
+                        "pilot_id": r["pilot_id"],
+                        "example_id": r["example_id"],
+                        "text_normalized": r["text_normalized"],
+                        "annotator_label": "",
+                        "confidence_1_to_5": "",
+                        "secondary_labels": "",
+                        "multi_issue_flag": "",
+                        "ambiguity_flag": "",
+                        "rationale": "",
+                    })
 
-        ann1 = [r["annotator_1_label"] for r in rows]
-        ann2 = [r["annotator_2_label"] for r in rows]
-        gold = [r["adjudicated_label"] for r in rows]
-        weak = [r["weak_cfpb_label"] for r in rows]
+        # Adjudication template
+        adj_fieldnames = [
+            "pilot_id",
+            "example_id",
+            "text_sample",
+            "rater_1_label",
+            "rater_2_label",
+            "raw_agreement",
+            "adjudicated_label",
+            "adjudication_status",
+            "secondary_labels",
+            "multi_issue_flag",
+            "ambiguity_flag",
+            "adjudication_notes",
+        ]
+        with open(adj_tmpl_path, "w", encoding="utf-8", newline="\n") as f:
+            writer = csv.DictWriter(f, fieldnames=adj_fieldnames)
+            writer.writeheader()
+            for r in sampled_rows:
+                writer.writerow({
+                    "pilot_id": r["pilot_id"],
+                    "example_id": r["example_id"],
+                    "text_sample": r["text_normalized"][:200].replace("\n", " "),
+                    "rater_1_label": "",
+                    "rater_2_label": "",
+                    "raw_agreement": "",
+                    "adjudicated_label": "",
+                    "adjudication_status": "",
+                    "secondary_labels": "",
+                    "multi_issue_flag": "",
+                    "ambiguity_flag": "",
+                    "adjudication_notes": "",
+                })
 
-        # Raw & Kappa agreement between independent annotators
-        raw_agree_count = sum(1 for a, b in zip(ann1, ann2) if a == b)
-        p_o_ann, kappa_ann = compute_cohens_kappa(ann1, ann2, self.class_names)
+        return r1_path, r2_path, adj_tmpl_path
 
-        # Agreement between CFPB weak labels and Adjudicated gold labels
-        weak_gold_agree_count = sum(1 for w, g in zip(weak, gold) if w == g)
-        p_o_weak_gold, kappa_weak_gold = compute_cohens_kappa(weak, gold, self.class_names)
+    def audit_annotation_provenance(self, file_path: str) -> Dict[str, Any]:
+        """Audits the provenance and integrity of an adjudication / simulation file.
+        
+        Verifies whether the file is a genuine human adjudication or a synthetic demonstration,
+        preventing simulated outputs from being falsely presented as human gold labels.
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Multi-issue count
-        multi_issue_count = sum(1 for r in rows if r.get("multi_issue_flag", "").lower() in ("true", "1", "yes"))
-        ambiguous_count = sum(1 for r in rows if r.get("ambiguity_flag", "").lower() in ("true", "1", "yes"))
+        with open(file_path, "r", encoding="utf-8") as f:
+            reader = list(csv.DictReader(f))
 
-        # Per-class metrics comparing weak labels to gold
-        per_class_weak = compute_per_class_metrics(gold, weak, self.class_names)
+        if not reader:
+            raise ValueError(f"File is empty: {file_path}")
 
-        # Class distribution of gold
-        gold_dist = collections.Counter(gold)
+        first_row = reader[0]
+        provenance = first_row.get("provenance", "").strip()
+
+        # Check if rater columns exist
+        has_ann1 = "annotator_1_label" in first_row or "rater_1_label" in first_row
+        has_ann2 = "annotator_2_label" in first_row or "rater_2_label" in first_row
+        has_adj = "adjudicated_label" in first_row
+
+        is_synthetic = (
+            provenance == PROVENANCE_SYNTHETIC
+            or "synthetic" in file_path.lower()
+            or any("synthetic" in str(v).lower() for v in first_row.values())
+        )
 
         return {
-            "total_instances": total_instances,
-            "raw_inter_annotator_agreement": round(p_o_ann, 4),
-            "raw_inter_annotator_agree_count": raw_agree_count,
-            "cohens_kappa_inter_annotator": round(kappa_ann, 4),
-            "raw_weak_vs_gold_agreement": round(p_o_weak_gold, 4),
-            "weak_vs_gold_agree_count": weak_gold_agree_count,
-            "cohens_kappa_weak_vs_gold": round(kappa_weak_gold, 4),
-            "divergence_count": total_instances - weak_gold_agree_count,
-            "divergence_rate": round((total_instances - weak_gold_agree_count) / total_instances, 4),
-            "multi_issue_count": multi_issue_count,
-            "multi_issue_rate": round(multi_issue_count / total_instances, 4),
-            "ambiguous_count": ambiguous_count,
-            "ambiguous_rate": round(ambiguous_count / total_instances, 4),
-            "per_class_weak_metrics": per_class_weak,
-            "gold_class_distribution": dict(gold_dist),
+            "file_path": file_path,
+            "row_count": len(reader),
+            "provenance": PROVENANCE_SYNTHETIC if is_synthetic else (provenance or PROVENANCE_HUMAN),
+            "is_synthetic": is_synthetic,
+            "has_raters": has_ann1 and has_ann2 and has_adj,
         }
+
+    def compute_agreement_from_raters(
+        self,
+        rater1: List[str],
+        rater2: List[str],
+        gold: Optional[List[str]] = None,
+        weak: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Computes inter-rater agreement and weak-to-gold divergence strictly from independent rater inputs."""
+        n = len(rater1)
+        if n == 0 or len(rater2) != n:
+            raise ValueError("Rater lists must be non-empty and of equal length")
+
+        po, kappa = compute_cohens_kappa(rater1, rater2, self.class_names)
+        res = {
+            "total_instances": n,
+            "raw_inter_annotator_agreement": round(po, 4),
+            "raw_inter_annotator_agree_count": sum(1 for a, b in zip(rater1, rater2) if a == b),
+            "cohens_kappa_inter_annotator": round(kappa, 4),
+        }
+
+        if gold and weak and len(gold) == n and len(weak) == n:
+            po_wg, kappa_wg = compute_cohens_kappa(weak, gold, self.class_names)
+            res.update({
+                "raw_weak_vs_gold_agreement": round(po_wg, 4),
+                "weak_vs_gold_agree_count": sum(1 for w, g in zip(weak, gold) if w == g),
+                "cohens_kappa_weak_vs_gold": round(kappa_wg, 4),
+                "divergence_count": sum(1 for w, g in zip(weak, gold) if w != g),
+                "divergence_rate": round(sum(1 for w, g in zip(weak, gold) if w != g) / n, 4),
+                "per_class_weak_metrics": compute_per_class_metrics(gold, weak, self.class_names),
+            })
+
+        return res
