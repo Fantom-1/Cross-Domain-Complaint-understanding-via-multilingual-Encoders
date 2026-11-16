@@ -39,9 +39,12 @@ from scripts.audit_phase5 import (
     EXPECTED_DUPLICATE_SOURCE_IDS,
     EXPECTED_EXACT_CONFLICTS,
     EXPECTED_GROUP_CONFLICTS,
+    EXPECTED_MAX_CLUSTER_ID,
     EXPECTED_MAX_CLUSTER_SIZE,
+    EXPECTED_MAX_CLUSTER_SPLIT,
     EXPECTED_MULTI_ITEM_CLUSTERS,
     EXPECTED_MULTI_ITEM_INSTANCES,
+    EXPECTED_SINGLETON_GROUPS,
     EXPECTED_TOTAL_GROUPS,
     EXPECTED_TOTAL_RECORDS,
     EXPECTED_UNIQUE_EXAMPLE_IDS,
@@ -225,9 +228,11 @@ class TestPhase5Deduplication(unittest.TestCase):
         self.assertEqual(int(m_dict["unique_source_ids"]), EXPECTED_UNIQUE_SOURCE_IDS)
         self.assertEqual(int(m_dict["duplicate_source_ids"]), EXPECTED_DUPLICATE_SOURCE_IDS)
         self.assertEqual(int(m_dict["total_groups"]), EXPECTED_TOTAL_GROUPS)
+        self.assertEqual(int(m_dict["singleton_groups"]), EXPECTED_SINGLETON_GROUPS)
         self.assertEqual(int(m_dict["multi_item_clusters"]), EXPECTED_MULTI_ITEM_CLUSTERS)
         self.assertEqual(int(m_dict["multi_item_instances"]), EXPECTED_MULTI_ITEM_INSTANCES)
         self.assertEqual(int(m_dict["max_cluster_size"]), EXPECTED_MAX_CLUSTER_SIZE)
+        self.assertEqual(int(m_dict["singleton_groups"]) + int(m_dict["multi_item_clusters"]), int(m_dict["total_groups"]))
         self.assertEqual(int(m_dict["exact_clusters_with_label_conflict"]), EXPECTED_EXACT_CONFLICTS)
         self.assertEqual(int(m_dict["group_clusters_with_label_conflict"]), EXPECTED_GROUP_CONFLICTS)
         self.assertEqual(m_dict["zero_leakage_verified"].strip().lower(), "true")
@@ -245,6 +250,13 @@ class TestPhase5Deduplication(unittest.TestCase):
 
             unique_clusters = set(r["cluster_id"] for r in rows)
             self.assertEqual(len(unique_clusters), EXPECTED_MULTI_ITEM_CLUSTERS)
+
+            cluster_counts = collections.Counter(r["cluster_id"] for r in rows)
+            top_cid, top_size = cluster_counts.most_common(1)[0]
+            self.assertEqual(top_cid, EXPECTED_MAX_CLUSTER_ID)
+            self.assertEqual(top_size, EXPECTED_MAX_CLUSTER_SIZE)
+            top_splits = {r["split"] for r in rows if r["cluster_id"] == EXPECTED_MAX_CLUSTER_ID}
+            self.assertEqual(top_splits, {EXPECTED_MAX_CLUSTER_SPLIT})
 
     def test_13_duplicate_clusters_row_level_size_reconciliation(self):
         """Asserts each row in duplicate_clusters.csv has cluster_size matching actual members."""
@@ -522,6 +534,36 @@ print(json.dumps(res, sort_keys=True))
         self.assertEqual(s["duplicate_example_ids"], 0)
         self.assertEqual(s["unique_source_ids"], 2)
         self.assertEqual(s["duplicate_source_ids"], 1)
+
+    def test_26_cross_process_cluster_assignment_and_manifest_determinism(self):
+        """Asserts that audit_records produces bit-for-bit identical cluster assignments and manifests across different PYTHONHASHSEED."""
+        sub_code = """
+import json, sys
+from src.data.duplicate_auditor import DuplicateAuditor
+
+# Synthetic records with multiple overlapping candidate pairs and rank ties
+records = [
+    {'example_id': f'e_{i}', 'text_normalized': f'dispute unauthorized credit inquiry template variant {i % 4} under section 609', 'split': 'train'}
+    for i in range(24)
+]
+auditor = DuplicateAuditor(seed=13)
+res = auditor.audit_records(records)
+cids = {r['example_id']: r['cluster_id'] for r in records}
+catalog = res['cluster_catalog']
+summary = res['summary']
+
+output = {'cids': cids, 'summary': summary, 'catalog': catalog}
+print(json.dumps(output, sort_keys=True))
+"""
+        env1 = dict(os.environ, PYTHONHASHSEED="0")
+        env2 = dict(os.environ, PYTHONHASHSEED="99999")
+
+        p1 = subprocess.run([sys.executable, "-c", sub_code], capture_output=True, text=True, env=env1)
+        p2 = subprocess.run([sys.executable, "-c", sub_code], capture_output=True, text=True, env=env2)
+
+        self.assertEqual(p1.returncode, 0, f"Process 1 failed: {p1.stderr}")
+        self.assertEqual(p2.returncode, 0, f"Process 2 failed: {p2.stderr}")
+        self.assertEqual(p1.stdout.strip(), p2.stdout.strip(), "Cluster assignments and manifests must be bit-for-bit identical across processes")
 
 
 if __name__ == "__main__":

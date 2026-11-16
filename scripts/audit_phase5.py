@@ -75,6 +75,8 @@ EXPECTED_SINGLETON_GROUPS = 42450
 EXPECTED_MULTI_ITEM_CLUSTERS = 692
 EXPECTED_MULTI_ITEM_INSTANCES = 3273
 EXPECTED_MAX_CLUSTER_SIZE = 123
+EXPECTED_MAX_CLUSTER_ID = "grp_exact_00a8a8a0bd44"
+EXPECTED_MAX_CLUSTER_SPLIT = "train"
 EXPECTED_GROUP_CONFLICTS = 135
 
 EXPECTED_CLUSTER_COLUMNS = [
@@ -233,6 +235,8 @@ def _run_phase5_audit_internal(
     # -------------------------------------------------------------------------
     log("Starting Pillar 3: Duplicate Manifest Schema & Data Integrity Invariants...", "INFO", 3)
     audit_metrics: Dict[str, Any] = {}
+    derived_max_cid: Optional[str] = None
+    derived_max_split: Optional[str] = None
 
     if force_pillar_fail == 3:
         log("Injected failure for Pillar 3", status="FAIL", pillar=3)
@@ -266,10 +270,16 @@ def _run_phase5_audit_internal(
                     log(f"Duplicate source IDs mismatch: got {audit_metrics.get('duplicate_source_ids')}, expected {EXPECTED_DUPLICATE_SOURCE_IDS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("total_groups", -1)) != EXPECTED_TOTAL_GROUPS:
                     log(f"Total groups mismatch: got {audit_metrics.get('total_groups')}, expected {EXPECTED_TOTAL_GROUPS}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("singleton_groups", -1)) != EXPECTED_SINGLETON_GROUPS:
+                    log(f"Singleton groups mismatch: got {audit_metrics.get('singleton_groups')}, expected {EXPECTED_SINGLETON_GROUPS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("multi_item_clusters", -1)) != EXPECTED_MULTI_ITEM_CLUSTERS:
                     log(f"Multi-item clusters mismatch: got {audit_metrics.get('multi_item_clusters')}, expected {EXPECTED_MULTI_ITEM_CLUSTERS}", status="FAIL", pillar=3)
                 elif int(audit_metrics.get("multi_item_instances", -1)) != EXPECTED_MULTI_ITEM_INSTANCES:
                     log(f"Multi-item instances mismatch: got {audit_metrics.get('multi_item_instances')}, expected {EXPECTED_MULTI_ITEM_INSTANCES}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("max_cluster_size", -1)) != EXPECTED_MAX_CLUSTER_SIZE:
+                    log(f"Max cluster size mismatch: got {audit_metrics.get('max_cluster_size')}, expected {EXPECTED_MAX_CLUSTER_SIZE}", status="FAIL", pillar=3)
+                elif int(audit_metrics.get("singleton_groups", 0)) + int(audit_metrics.get("multi_item_clusters", 0)) != int(audit_metrics.get("total_groups", -1)):
+                    log("Partition math invariant failed: singleton_groups + multi_item_clusters != total_groups", status="FAIL", pillar=3)
                 else:
                     log(f"Loaded duplicate audit manifest ({len(audit_metrics)} metrics validated against canonical invariants).", status="PASS", pillar=3)
             except Exception as e:
@@ -297,6 +307,21 @@ def _run_phase5_audit_internal(
                             log(f"Expected {EXPECTED_MULTI_ITEM_CLUSTERS} distinct clusters, got {len(cluster_counter)}", status="FAIL", pillar=3)
                         else:
                             log(f"Distinct cluster count verified ({len(cluster_counter)} clusters).", status="PASS", pillar=3)
+
+                        # Dynamically derive and reconcile max cluster identity and split
+                        max_cid, actual_max_size = cluster_counter.most_common(1)[0]
+                        max_splits = {r["split"] for r in cluster_rows if r["cluster_id"] == max_cid}
+
+                        if actual_max_size != EXPECTED_MAX_CLUSTER_SIZE:
+                            log(f"Catalog max cluster size mismatch: got {actual_max_size}, expected {EXPECTED_MAX_CLUSTER_SIZE}", status="FAIL", pillar=3)
+                        elif max_cid != EXPECTED_MAX_CLUSTER_ID:
+                            log(f"Catalog max cluster ID mismatch: got {max_cid}, expected {EXPECTED_MAX_CLUSTER_ID}", status="FAIL", pillar=3)
+                        elif len(max_splits) != 1 or list(max_splits)[0] != EXPECTED_MAX_CLUSTER_SPLIT:
+                            log(f"Catalog max cluster split mismatch: got {max_splits}, expected {{{EXPECTED_MAX_CLUSTER_SPLIT}}}", status="FAIL", pillar=3)
+                        else:
+                            derived_max_cid = max_cid
+                            derived_max_split = list(max_splits)[0]
+                            log(f"Max cluster verified: {derived_max_cid} (N={actual_max_size}, 100% in {derived_max_split}).", status="PASS", pillar=3)
 
                         size_mismatch = False
                         for r in cluster_rows:
@@ -468,6 +493,20 @@ def _run_phase5_audit_internal(
     overall_passed = all(pillar_status.values())
     overall_status_str = "PASSED" if overall_passed else "FAILED"
 
+    max_cid_val = derived_max_cid or EXPECTED_MAX_CLUSTER_ID
+    max_split_val = derived_max_split or EXPECTED_MAX_CLUSTER_SPLIT
+
+    tot_recs = int(audit_metrics.get("total_records", EXPECTED_TOTAL_RECORDS))
+    uniq_eids = int(audit_metrics.get("unique_example_ids", EXPECTED_UNIQUE_EXAMPLE_IDS))
+    dup_sids = int(audit_metrics.get("duplicate_source_ids", EXPECTED_DUPLICATE_SOURCE_IDS))
+    tot_grps = int(audit_metrics.get("total_groups", EXPECTED_TOTAL_GROUPS))
+    sing_grps = int(audit_metrics.get("singleton_groups", EXPECTED_SINGLETON_GROUPS))
+    multi_cls = int(audit_metrics.get("multi_item_clusters", EXPECTED_MULTI_ITEM_CLUSTERS))
+    multi_inst = int(audit_metrics.get("multi_item_instances", EXPECTED_MULTI_ITEM_INSTANCES))
+    max_size = int(audit_metrics.get("max_cluster_size", EXPECTED_MAX_CLUSTER_SIZE))
+    ex_conflicts = int(audit_metrics.get("exact_clusters_with_label_conflict", EXPECTED_EXACT_CONFLICTS))
+    grp_conflicts = int(audit_metrics.get("group_clusters_with_label_conflict", EXPECTED_GROUP_CONFLICTS))
+
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     snapshot_content = f"""# Automated Phase 5 Duplicate, Overlap & Contamination Audit Report
 
@@ -494,16 +533,16 @@ def _run_phase5_audit_internal(
 
 ## 2. Key Audit Statistics Verified
 
-* **Canonical Dataset Total Instances:** {EXPECTED_TOTAL_RECORDS:,}
-* **Unique Example IDs:** {EXPECTED_UNIQUE_EXAMPLE_IDS:,} (Duplicate source IDs: 0)
-* **Total Partitions (group_id):** {EXPECTED_TOTAL_GROUPS:,} (Singleton groups: 42,098)
-* **Multi-Item Clusters:** {EXPECTED_MULTI_ITEM_CLUSTERS} clusters ({EXPECTED_MULTI_ITEM_INSTANCES:,} instances)
-* **Maximum Cluster Size:** {EXPECTED_MAX_CLUSTER_SIZE} instances (`grp_exact_6638526a9e2a`, 100% in validation)
+* **Canonical Dataset Total Instances:** {tot_recs:,}
+* **Unique Example IDs:** {uniq_eids:,} (Duplicate source IDs: {dup_sids})
+* **Total Partitions (cluster_id):** {tot_grps:,} (Singleton groups: {sing_grps:,})
+* **Multi-Item Clusters:** {multi_cls} clusters ({multi_inst:,} instances)
+* **Maximum Cluster Size:** {max_size} instances (`{max_cid_val}`, 100% in {max_split_val})
 * **Cross-Partition Group Leakage:** **0** (Train ∩ Val = 0, Train ∩ Test = 0, Val ∩ Test = 0)
 * **Cross-Partition Text Hash Leakage:** **0** (Train ∩ Val = 0, Train ∩ Test = 0, Val ∩ Test = 0)
 * **PolyAI/banking77 Contamination:** **0** instances (Zero cross-dataset leakage)
-* **Exact Duplicate Text Collisions with Label Conflict:** {EXPECTED_EXACT_CONFLICTS} distinct text hashes
-* **Near-Duplicate Clusters with Label Conflict:** {EXPECTED_GROUP_CONFLICTS} clusters
+* **Exact Duplicate Text Collisions with Label Conflict:** {ex_conflicts} distinct text hashes
+* **Near-Duplicate Clusters with Label Conflict:** {grp_conflicts} clusters
 
 ---
 

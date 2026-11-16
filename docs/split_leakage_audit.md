@@ -2,7 +2,7 @@
 
 **Project:** Cross-Domain Complaint Understanding via Multilingual Encoders  
 **Phase:** Phase 5 (Duplicate, Overlap, and Contamination Audit)  
-**Execution Date:** 2026-11-16 16:06:10Z  
+**Execution Date:** 2026-11-16 16:17:00Z  
 **Dataset Analyzed:** `data/processed/canonical_dataset.parquet` (45,723 instances, SHA-256 `b591ba980a99ba82...`)  
 **Auxiliary Benchmark:** `PolyAI/banking77` (13,083 queries: train 10,003 + test 3,080)  
 
@@ -32,7 +32,7 @@ Phase 5 establishes an empirical audit of exact text duplication, near-duplicate
    * Singleton groups: **42,450** (98.40% of all partitions).
    * Multi-item near-duplicate clusters: **692** clusters, comprising **3,273** records.
    * Cluster size distribution: Mean **4.73**, Median **2.0**, 75th percentile **3.0**, 90th percentile **8.0**, Max **123**.
-   * Evaluated cluster mean pairwise Jaccard similarity: **0.7615** (aggregate min similarity **0.1796**).
+   * Evaluated cluster mean pairwise Jaccard similarity: **0.7564** (aggregate min similarity **0.1693**).
    * LSH Candidate Generation & Verification: **13,260** candidate pairs evaluated, **10,588** pairs verified ($J \ge 0.50$), **2,672** false-positive collisions rejected ($J < 0.50$).
 
 4. **Weak Administrative Supervision & Conflicting Source Labels:**
@@ -82,8 +82,8 @@ All records belonging to credit-repair template clusters (up to size 123) are as
 MinHash LSH with transitive union-find risks "chain-merging," where document A is linked to B and B to C, but A and C are semantically unrelated.
 
 To quantify chain-merging severity, we evaluated pairwise Jaccard similarities within sampled multi-item clusters using deterministic digest-derived PRNG seeding:
-- **Mean Pairwise Jaccard Similarity across Evaluated Clusters:** **0.7615**
-- **Aggregate Minimum Pairwise Jaccard Similarity:** **0.1796**
+- **Mean Pairwise Jaccard Similarity across Evaluated Clusters:** **0.7564**
+- **Aggregate Minimum Pairwise Jaccard Similarity:** **0.1693**
 - **Cluster Isolation:** 98.40% of all partitions (42,450 of 43,142) remain singletons. There are no sprawling "mega-components" spanning thousands of documents, confirming that the threshold ($s \approx 0.50$) and 400-shingle cap successfully prevent runaway transitive chaining.
 
 ---
@@ -96,16 +96,16 @@ A critical finding of Phase 5 is the empirical measurement of label disagreement
 
 | Cluster ID | Size | Unique Labels | Dominant Intent Label | Disagreement Rate | Split Assignment |
 | :--- | :---: | :---: | :--- | :---: | :---: |
-| `grp_exact_2c8ab98082cf` | 123 | 3 | `transaction_problem` | 66.7% | `train` |
-| `grp_exact_32d929c5ff19` | 113 | 3 | `payment_problem` | 66.7% | `train` |
-| `grp_exact_11b2eea4d07f` | 111 | 4 | `reporting_improper_use` | 75.0% | `validation` |
-| `grp_exact_2f7300d57c54` | 90 | 4 | `payment_problem` | 75.0% | `train` |
-| `grp_exact_2d22c3b8c25e` | 62 | 4 | `fraud_or_scam` | 75.0% | `train` |
-| `grp_exact_0a827f21a285` | 53 | 3 | `payment_problem` | 66.7% | `train` |
-| `grp_exact_158815bf0d1e` | 43 | 2 | `reporting_incorrect_information` | 50.0% | `validation` |
-| `grp_exact_23899f7e3e2f` | 42 | 3 | `fraud_or_scam` | 66.7% | `test` |
+| `grp_exact_00a8a8a0bd44` | 123 | 3 | `credit_terms_dispute` | 66.7% | `train` |
+| `grp_exact_150207f8f89b` | 113 | 3 | `reporting_improper_use` | 66.7% | `train` |
+| `grp_exact_00b418e6ba0b` | 111 | 4 | `reporting_improper_use` | 75.0% | `validation` |
+| `grp_exact_05722d84ce8d` | 90 | 4 | `payment_problem` | 75.0% | `train` |
+| `grp_exact_08fb4daecc77` | 62 | 4 | `fraud_or_scam` | 75.0% | `train` |
+| `grp_exact_01586833b1af` | 53 | 3 | `account_management` | 66.7% | `train` |
+| `grp_exact_01617fb88e40` | 43 | 2 | `reporting_investigation_dispute` | 50.0% | `validation` |
+| `grp_exact_23899f7e3e2f` | 42 | 3 | `payment_problem` | 66.7% | `test` |
 | `grp_exact_bc263343afc7` | 41 | 3 | `reporting_improper_use` | 66.7% | `train` |
-| `grp_exact_cad462289682` | 41 | 2 | `reporting_investigation_dispute` | 50.0% | `validation` |
+| `grp_exact_2e202cd270c3` | 41 | 2 | `reporting_investigation_dispute` | 50.0% | `validation` |
 
 ---
 

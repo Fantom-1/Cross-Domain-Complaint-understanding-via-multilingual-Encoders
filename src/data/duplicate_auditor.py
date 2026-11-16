@@ -272,13 +272,15 @@ class DuplicateAuditor:
 
         # Union-Find initialized with exact groups
         uf = UnionFind()
-        for h in unique_shingles.keys():
+        for h in sorted(unique_shingles.keys()):
             uf.find(exact_map[h])
 
         # Candidate Jaccard verification: reject false bridges (s < threshold)
+        # Processed in strictly deterministic sorted order
+        sorted_candidate_pairs = sorted(candidate_pairs)
         verified_candidate_pairs = 0
         rejected_candidate_pairs = 0
-        for h1, h2 in candidate_pairs:
+        for h1, h2 in sorted_candidate_pairs:
             sim = jaccard_similarity(unique_shingles[h1], unique_shingles[h2])
             if sim >= self.jaccard_threshold:
                 verified_candidate_pairs += 1
@@ -286,9 +288,21 @@ class DuplicateAuditor:
             else:
                 rejected_candidate_pairs += 1
 
-        # Assign final verified cluster_id to each record
+        # Derive canonical cluster ID from the lexicographically minimum text hash in each connected component
+        component_hashes = collections.defaultdict(list)
+        for h in unique_shingles.keys():
+            root = uf.find(exact_map[h])
+            component_hashes[root].append(h)
+
+        canonical_cluster_ids = {}
+        for root, hashes in component_hashes.items():
+            min_h = min(hashes)
+            canonical_cluster_ids[root] = f"grp_exact_{min_h[:12]}"
+
+        # Assign final verified canonical cluster_id to each record
         for r in records:
-            r["cluster_id"] = uf.find(r["exact_group_id"])
+            root = uf.find(r["exact_group_id"])
+            r["cluster_id"] = canonical_cluster_ids[root]
 
         # Cluster analysis on verified clusters
         cluster_to_records = collections.defaultdict(list)
