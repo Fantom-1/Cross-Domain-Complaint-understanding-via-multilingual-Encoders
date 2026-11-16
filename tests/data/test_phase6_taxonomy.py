@@ -143,10 +143,20 @@ class TestPhase6Taxonomy(unittest.TestCase):
         for cls_name, cnt in counts.items():
             self.assertEqual(cnt, EXPECTED_PILOT_PER_CLASS)
 
+        # Global split totals
         split_c = collections.Counter(s["split"] for s in samples)
         self.assertEqual(split_c["train"], EXPECTED_PILOT_TRAIN)
         self.assertEqual(split_c["validation"], EXPECTED_PILOT_VAL)
         self.assertEqual(split_c["test"], EXPECTED_PILOT_TEST)
+
+        # Independent audit of per-class split matrix: 14 train / 3 val / 3 test per class
+        class_splits = collections.defaultdict(lambda: collections.Counter())
+        for s in samples:
+            class_splits[s["weak_cfpb_label"]][s["split"]] += 1
+        for cls_name, s_counts in class_splits.items():
+            self.assertEqual(s_counts["train"], 14, f"Class {cls_name} must have 14 train")
+            self.assertEqual(s_counts["validation"], 3, f"Class {cls_name} must have 3 validation")
+            self.assertEqual(s_counts["test"], 3, f"Class {cls_name} must have 3 test")
 
         # Cluster exclusivity check
         unique_clusters = set(s["cluster_id"] for s in samples)
@@ -181,6 +191,15 @@ class TestPhase6Taxonomy(unittest.TestCase):
             self.assertEqual(split_c["train"], EXPECTED_PILOT_TRAIN)
             self.assertEqual(split_c["validation"], EXPECTED_PILOT_VAL)
             self.assertEqual(split_c["test"], EXPECTED_PILOT_TEST)
+
+            # Per-class split matrix check on synthetic fixture
+            class_splits = collections.defaultdict(lambda: collections.Counter())
+            for s in samples:
+                class_splits[s["weak_cfpb_label"]][s["split"]] += 1
+            for cls_name, s_counts in class_splits.items():
+                self.assertEqual(s_counts["train"], 14, f"Class {cls_name} must have 14 train")
+                self.assertEqual(s_counts["validation"], 3, f"Class {cls_name} must have 3 validation")
+                self.assertEqual(s_counts["test"], 3, f"Class {cls_name} must have 3 test")
         finally:
             if os.path.exists(tmp_parquet):
                 os.remove(tmp_parquet)
@@ -243,10 +262,92 @@ class TestPhase6Taxonomy(unittest.TestCase):
             self.assertIn("simulated_adjudicated_label", r)
 
     def test_10_provenance_auditor_detects_synthetic_vs_human(self):
-        """Asserts TaxonomyAuditor.audit_annotation_provenance correctly identifies synthetic files."""
+        """Asserts TaxonomyAuditor.audit_annotation_provenance fails closed on missing/mixed/unrecognized provenance."""
+        # 1. Valid synthetic file passes
         res = self.auditor.audit_annotation_provenance(SYNTHETIC_SIM_CSV)
         self.assertTrue(res["is_synthetic"])
+        self.assertFalse(res["is_human"])
         self.assertEqual(res["provenance"], PROVENANCE_SYNTHETIC)
+
+        # 2. Missing provenance column fails closed
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as tmp:
+            writer = csv.DictWriter(tmp, fieldnames=["pilot_id", "example_id", "rater_1_label"])
+            writer.writeheader()
+            writer.writerow({"pilot_id": "P1", "example_id": "E1", "rater_1_label": "fraud"})
+            no_prov_path = tmp.name
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                self.auditor.audit_annotation_provenance(no_prov_path)
+            self.assertIn("Missing required 'provenance' column", str(ctx.exception))
+        finally:
+            if os.path.exists(no_prov_path):
+                os.remove(no_prov_path)
+
+        # 3. Missing/empty provenance value on a row fails closed
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as tmp:
+            writer = csv.DictWriter(tmp, fieldnames=["pilot_id", "provenance"])
+            writer.writeheader()
+            writer.writerow({"pilot_id": "P1", "provenance": PROVENANCE_SYNTHETIC})
+            writer.writerow({"pilot_id": "P2", "provenance": ""})
+            empty_prov_path = tmp.name
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                self.auditor.audit_annotation_provenance(empty_prov_path)
+            self.assertIn("missing or empty 'provenance'", str(ctx.exception))
+        finally:
+            if os.path.exists(empty_prov_path):
+                os.remove(empty_prov_path)
+
+        # 4. Unrecognized provenance value fails closed
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as tmp:
+            writer = csv.DictWriter(tmp, fieldnames=["pilot_id", "provenance"])
+            writer.writeheader()
+            writer.writerow({"pilot_id": "P1", "provenance": "unknown_experimental_simulation"})
+            unrec_path = tmp.name
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                self.auditor.audit_annotation_provenance(unrec_path)
+            self.assertIn("unrecognized provenance", str(ctx.exception))
+        finally:
+            if os.path.exists(unrec_path):
+                os.remove(unrec_path)
+
+        # 5. Mixed provenance across rows fails closed
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as tmp:
+            writer = csv.DictWriter(tmp, fieldnames=["pilot_id", "provenance"])
+            writer.writeheader()
+            writer.writerow({"pilot_id": "P1", "provenance": PROVENANCE_SYNTHETIC})
+            writer.writerow({"pilot_id": "P2", "provenance": PROVENANCE_HUMAN})
+            mixed_path = tmp.name
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                self.auditor.audit_annotation_provenance(mixed_path)
+            self.assertIn("Mixed/inconsistent provenance detected", str(ctx.exception))
+        finally:
+            if os.path.exists(mixed_path):
+                os.remove(mixed_path)
+
+        # 6. Valid human file passes
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, newline="") as tmp:
+            writer = csv.DictWriter(tmp, fieldnames=["pilot_id", "provenance", "annotator_1_label", "annotator_2_label", "adjudicated_label"])
+            writer.writeheader()
+            for i in range(10):
+                writer.writerow({
+                    "pilot_id": f"P{i}",
+                    "provenance": PROVENANCE_HUMAN,
+                    "annotator_1_label": "fraud_or_scam",
+                    "annotator_2_label": "fraud_or_scam",
+                    "adjudicated_label": "fraud_or_scam",
+                })
+            human_path = tmp.name
+        try:
+            h_res = self.auditor.audit_annotation_provenance(human_path)
+            self.assertTrue(h_res["is_human"])
+            self.assertFalse(h_res["is_synthetic"])
+            self.assertTrue(h_res["has_raters"])
+        finally:
+            if os.path.exists(human_path):
+                os.remove(human_path)
 
     def test_11_governance_disclaimers_in_protocol_report(self):
         """Asserts annotation_agreement.md contains required non-human simulation disclosure and weak notices."""
@@ -258,6 +359,8 @@ class TestPhase6Taxonomy(unittest.TestCase):
         self.assertIn("synthetic rule-based heuristic simulation", text)
         self.assertIn("weak administrative supervision", text)
         self.assertIn("PolyAI/banking77", text)
+        self.assertIn("strictly isolated", text)
+        self.assertIn("cannot estimate actual CFPB weak-label error", text)
         self.assertIn("strictly isolated", text)
 
     def test_12_cross_process_pilot_sampling_determinism(self):
@@ -352,10 +455,83 @@ finally:
             self.assertNotIn("weak_cfpb_label", r1_rows[0])
             self.assertNotIn("source_label", r1_rows[0])
 
+    def test_15_regression_test_per_class_split_matrix_detects_swapped_splits(self):
+        """Asserts that swapping split assignments across classes while preserving global totals fails the audit."""
+        self.assertTrue(os.path.exists(PILOT_SAMPLING_CSV), "Pilot manifest must exist")
+        with open(PILOT_SAMPLING_CSV, "r", encoding="utf-8") as f:
+            valid_rows = list(csv.DictReader(f))
+
+        # Deep copy rows
+        swapped_rows = [dict(r) for r in valid_rows]
+
+        # Find a train row in one class and a validation row in a different class
+        c1 = "account_access"
+        c2 = "closing_process"
+        idx1 = next(i for i, r in enumerate(swapped_rows) if r["weak_cfpb_label"] == c1 and r["split"] == "train")
+        idx2 = next(i for i, r in enumerate(swapped_rows) if r["weak_cfpb_label"] == c2 and r["split"] == "validation")
+
+        # Swap their splits
+        swapped_rows[idx1]["split"] = "validation"
+        swapped_rows[idx2]["split"] = "train"
+
+        # Global split totals are strictly preserved: 224 train, 48 validation, 48 test
+        global_splits = collections.Counter(r["split"] for r in swapped_rows)
+        self.assertEqual(global_splits["train"], EXPECTED_PILOT_TRAIN)
+        self.assertEqual(global_splits["validation"], EXPECTED_PILOT_VAL)
+        self.assertEqual(global_splits["test"], EXPECTED_PILOT_TEST)
+
+        # Per-class split matrix is now violated: c1 has 13 train/4 val; c2 has 15 train/2 val
+        c1_splits = collections.Counter(r["split"] for r in swapped_rows if r["weak_cfpb_label"] == c1)
+        self.assertEqual(c1_splits["train"], 13)
+        self.assertEqual(c1_splits["validation"], 4)
+
+        # Run per-class split matrix audit check against swapped rows
+        matrix = collections.defaultdict(lambda: collections.Counter())
+        for r in swapped_rows:
+            matrix[r["weak_cfpb_label"]][r["split"]] += 1
+
+        mismatched_classes = []
+        for cls_name, s_counts in matrix.items():
+            if s_counts.get("train", 0) != 14 or s_counts.get("validation", 0) != 3 or s_counts.get("test", 0) != 3:
+                mismatched_classes.append((cls_name, dict(s_counts)))
+
+        self.assertGreater(len(mismatched_classes), 0, "Per-class audit must identify corrupted split quotas despite identical global totals")
+        mismatched_names = [m[0] for m in mismatched_classes]
+        self.assertIn(c1, mismatched_names)
+        self.assertIn(c2, mismatched_names)
+
+    def test_16_regression_test_adjudication_template_full_text(self):
+        """Asserts adjudication_template.csv preserves the full complaint narrative without 200-char truncation."""
+        self.assertTrue(os.path.exists(ADJUDICATION_TMPL_CSV), "Adjudication template must exist")
+        self.assertTrue(os.path.exists(PILOT_SAMPLING_CSV), "Pilot manifest must exist")
+
+        with open(ADJUDICATION_TMPL_CSV, "r", encoding="utf-8") as f:
+            adj_rows = list(csv.DictReader(f))
+        with open(PILOT_SAMPLING_CSV, "r", encoding="utf-8") as f:
+            pilot_rows = list(csv.DictReader(f))
+
+        self.assertEqual(len(adj_rows), len(pilot_rows))
+        self.assertEqual(len(adj_rows), EXPECTED_PILOT_SIZE)
+
+        # Check full text is preserved bit-for-bit without truncation
+        for adj_r, pilot_r in zip(adj_rows, pilot_rows):
+            self.assertEqual(adj_r["pilot_id"], pilot_r["pilot_id"])
+            self.assertEqual(adj_r["example_id"], pilot_r["example_id"])
+            self.assertEqual(
+                adj_r["text_normalized"],
+                pilot_r["text_normalized"],
+                f"Adjudication template text truncated or corrupted for {adj_r['pilot_id']}"
+            )
+
+        # Verify that max and average narrative lengths reflect complete complaint texts
+        text_lengths = [len(r["text_normalized"]) for r in adj_rows]
+        self.assertGreater(max(text_lengths), 1000, "Maximum narrative text length should exceed 1000 characters")
+        self.assertGreater(sum(text_lengths) / len(text_lengths), 500, "Average narrative length should exceed 500 characters")
+
     # -------------------------------------------------------------------------
-    # Failure Injection Tests (15-20) Isolated to Temporary Report Files
+    # Failure Injection Tests (17-22) Isolated to Temporary Report Files
     # -------------------------------------------------------------------------
-    def test_15_failure_injection_pillar_1(self):
+    def test_17_failure_injection_pillar_1(self):
         """Asserts audit failure when Pillar 1 environment preflight fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name
@@ -366,7 +542,7 @@ finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def test_16_failure_injection_pillar_2(self):
+    def test_18_failure_injection_pillar_2(self):
         """Asserts audit failure when Pillar 2 provenance fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name
@@ -377,7 +553,7 @@ finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def test_17_failure_injection_pillar_3(self):
+    def test_19_failure_injection_pillar_3(self):
         """Asserts audit failure when Pillar 3 codebook invariant fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name
@@ -388,7 +564,7 @@ finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def test_18_failure_injection_pillar_4(self):
+    def test_20_failure_injection_pillar_4(self):
         """Asserts audit failure when Pillar 4 collision audit fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name
@@ -399,7 +575,7 @@ finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def test_19_failure_injection_pillar_5(self):
+    def test_21_failure_injection_pillar_5(self):
         """Asserts audit failure when Pillar 5 sampling manifest fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name
@@ -410,7 +586,7 @@ finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def test_20_failure_injection_pillar_6(self):
+    def test_22_failure_injection_pillar_6(self):
         """Asserts audit failure when Pillar 6 blinded instrument gate fails."""
         with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
             tmp_path = tmp.name

@@ -283,16 +283,28 @@ def _run_phase6_audit_internal(
                 split_counts = collections.Counter(r["split"] for r in pilot_rows)
                 unique_clusters = len(set(r["cluster_id"] for r in pilot_rows))
 
+                # Per-class split matrix: independently audit that EVERY class has 14 train, 3 val, 3 test
+                class_split_matrix = collections.defaultdict(lambda: collections.Counter())
+                for r in pilot_rows:
+                    class_split_matrix[r["weak_cfpb_label"]][r["split"]] += 1
+
+                mismatched_classes = []
+                for cls_name, s_counts in class_split_matrix.items():
+                    if s_counts.get("train", 0) != 14 or s_counts.get("validation", 0) != 3 or s_counts.get("test", 0) != 3:
+                        mismatched_classes.append((cls_name, dict(s_counts)))
+
                 if len(pilot_rows) != EXPECTED_PILOT_SIZE:
                     log(f"Pilot manifest size mismatch: got {len(pilot_rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=5)
                 elif len(cls_counts) != EXPECTED_CLASS_COUNT or any(c != EXPECTED_PILOT_PER_CLASS for c in cls_counts.values()):
                     log(f"Pilot class stratification mismatch: {cls_counts}", status="FAIL", pillar=5)
                 elif split_counts.get("train", 0) != EXPECTED_PILOT_TRAIN or split_counts.get("validation", 0) != EXPECTED_PILOT_VAL or split_counts.get("test", 0) != EXPECTED_PILOT_TEST:
                     log(f"Pilot split quota mismatch: got {split_counts}, expected train={EXPECTED_PILOT_TRAIN}, val={EXPECTED_PILOT_VAL}, test={EXPECTED_PILOT_TEST}", status="FAIL", pillar=5)
+                elif mismatched_classes:
+                    log(f"Per-class split matrix mismatch (must be 14 train / 3 val / 3 test per class): {mismatched_classes}", status="FAIL", pillar=5)
                 elif unique_clusters != EXPECTED_PILOT_UNIQUE_CLUSTERS:
                     log(f"Pilot cluster exclusivity violation: got {unique_clusters} unique clusters, expected {EXPECTED_PILOT_UNIQUE_CLUSTERS}", status="FAIL", pillar=5)
                 else:
-                    log(f"Pilot sampling manifest verified: exactly {EXPECTED_PILOT_SIZE} records (20/class, 14 train / 3 val / 3 test per class, 320 distinct clusters).", status="PASS", pillar=5)
+                    log(f"Pilot sampling manifest verified: exactly {EXPECTED_PILOT_SIZE} records across {EXPECTED_CLASS_COUNT} weak-label strata (14 train / 3 val / 3 test per class, 320 distinct clusters).", status="PASS", pillar=5)
         except Exception as e:
             log(f"Pillar 5 sampling manifest error: {e}", status="FAIL", pillar=5)
 
@@ -328,23 +340,37 @@ def _run_phase6_audit_internal(
             else:
                 log("Blinded annotation instruments verified: Rater 1 & Rater 2 sheets strip all CFPB metadata.", status="PASS", pillar=6)
 
-            # Check blank adjudication template
+            # Check blank adjudication template & ensure full narrative preserved
             if not os.path.exists(ADJUDICATION_TMPL_CSV):
                 log(f"Adjudication template missing: {ADJUDICATION_TMPL_CSV}", status="FAIL", pillar=6)
             else:
-                log("Blank adjudication template verified.", status="PASS", pillar=6)
+                with open(ADJUDICATION_TMPL_CSV, "r", encoding="utf-8") as f:
+                    adj_rows = list(csv.DictReader(f))
+                if len(adj_rows) != EXPECTED_PILOT_SIZE:
+                    log(f"Adjudication template size mismatch: got {len(adj_rows)}, expected {EXPECTED_PILOT_SIZE}", status="FAIL", pillar=6)
+                elif "text_normalized" not in adj_rows[0]:
+                    log(f"Adjudication template missing 'text_normalized' column: {list(adj_rows[0].keys())}", status="FAIL", pillar=6)
+                else:
+                    max_len = max(len(r["text_normalized"]) for r in adj_rows)
+                    if max_len <= 200:
+                        log("Adjudication template appears truncated to <= 200 characters!", status="FAIL", pillar=6)
+                    else:
+                        log("Blank adjudication template verified with complete, untruncated narrative text.", status="PASS", pillar=6)
 
-            # Provenance gate: verify synthetic simulation is explicitly tagged as synthetic
+            # Provenance gate: verify synthetic simulation using fail-closed audit_annotation_provenance helper
             if not os.path.exists(SYNTHETIC_SIM_CSV):
                 log(f"Synthetic simulation manifest missing: {SYNTHETIC_SIM_CSV}", status="FAIL", pillar=6)
             else:
-                with open(SYNTHETIC_SIM_CSV, "r", encoding="utf-8") as f:
-                    sim_rows = list(csv.DictReader(f))
-                provs = set(r.get("provenance") for r in sim_rows)
-                if provs != {"synthetic_rule_simulation"}:
-                    log(f"Simulation file must be tagged strictly with 'synthetic_rule_simulation', got: {provs}", status="FAIL", pillar=6)
-                else:
-                    log("Provenance gate confirmed: simulation artifact explicitly marked 'synthetic_rule_simulation' (no fabricated human claims).", status="PASS", pillar=6)
+                from src.data.taxonomy_auditor import TaxonomyAuditor, PROVENANCE_SYNTHETIC
+                auditor_prov = TaxonomyAuditor()
+                try:
+                    prov_res = auditor_prov.audit_annotation_provenance(SYNTHETIC_SIM_CSV)
+                    if not prov_res.get("is_synthetic"):
+                        log(f"Simulation file must be tagged strictly as '{PROVENANCE_SYNTHETIC}', got: {prov_res}", status="FAIL", pillar=6)
+                    else:
+                        log("Provenance gate confirmed via fail-closed auditor: simulation artifact verified 'synthetic_rule_simulation' across all rows.", status="PASS", pillar=6)
+                except Exception as e:
+                    log(f"Fail-closed provenance audit rejected simulation artifact: {e}", status="FAIL", pillar=6)
         except Exception as e:
             log(f"Pillar 6 provenance error: {e}", status="FAIL", pillar=6)
 
@@ -368,10 +394,12 @@ def _run_phase6_audit_internal(
                     log("Report missing weak administrative supervision notice.", status="FAIL", pillar=7)
                 elif "PolyAI/banking77" not in rep_text or "strictly isolated" not in rep_text:
                     log("Report missing auxiliary Banking77 classification notice.", status="FAIL", pillar=7)
+                elif "cannot estimate actual CFPB weak-label error" not in rep_text:
+                    log("Report missing explicit disclaimer that synthetic simulation cannot estimate weak-label error/misalignment.", status="FAIL", pillar=7)
                 elif (f"**{EXPECTED_PILOT_SIZE}**" not in rep_text and f"($N = {EXPECTED_PILOT_SIZE}$)" not in rep_text) or f"**{EXPECTED_PILOT_TRAIN} train**" not in rep_text:
                     log("Headline numbers reconciliation failed between manifest and markdown report.", status="FAIL", pillar=7)
                 else:
-                    log("Governance notices and exact headline metrics reconciled in protocol report.", status="PASS", pillar=7)
+                    log("Governance notices, non-evidential disclaimers, and exact headline metrics reconciled in protocol report.", status="PASS", pillar=7)
         except Exception as e:
             log(f"Pillar 7 governance reconciliation error: {e}", status="FAIL", pillar=7)
 
@@ -434,8 +462,8 @@ def _run_phase6_audit_internal(
 | **Pillar 2** | Dataset Provenance & File Checksums | **{'PASS' if pillar_status[2] else 'FAIL'}** | Canonical parquet SHA-256 (`b591ba98...`), taxonomy JSON, source mapping manifest |
 | **Pillar 3** | Taxonomy Codebook & Schema Invariants | **{'PASS' if pillar_status[3] else 'FAIL'}** | 16 classes documented with positive inclusions, negative exclusions, and multi-issue policy |
 | **Pillar 4** | Source Mapping & Collision Audit | **{'PASS' if pillar_status[4] else 'FAIL'}** | 221 CFPB mappings (198 mapped, 23 unmapped, 17 multi-match collisions audited) |
-| **Pillar 5** | Stratified Sampling & Dedup Invariants | **{'PASS' if pillar_status[5] else 'FAIL'}** | Exactly 320 records (20/class, 14 train / 3 val / 3 test per class, 320 unique clusters) |
-| **Pillar 6** | Blinded Instruments & Provenance Gate | **{'PASS' if pillar_status[6] else 'FAIL'}** | Blinded Rater 1 & 2 sheets strip metadata; simulation tagged 'synthetic_rule_simulation' |
+| **Pillar 5** | Stratified Sampling & Dedup Invariants | **{'PASS' if pillar_status[5] else 'FAIL'}** | Exactly 320 records across 16 weak-label strata (14 train / 3 val / 3 test per class, 320 unique clusters) |
+| **Pillar 6** | Blinded Instruments & Provenance Gate | **{'PASS' if pillar_status[6] else 'FAIL'}** | Blinded sheets & full text template; fail-closed provenance verification |
 | **Pillar 7** | Governance & Exact Reconciliation | **{'PASS' if pillar_status[7] else 'FAIL'}** | Non-human simulation disclosure, weak supervision notices, exact metric match |
 | **Pillar 8** | Unit Test Suite Execution | **{'PASS' if pillar_status[8] else 'FAIL'}** | Regression test suites pass with 0 failures across Phases 1–6 |
 
@@ -447,7 +475,7 @@ def _run_phase6_audit_internal(
 * **Target Closed-Set Classes:** {EXPECTED_CLASS_COUNT} classes
 * **CFPB Source Mappings Audited:** {EXPECTED_TOTAL_MAPPINGS} categories ({EXPECTED_MAPPED_COUNT} mapped, {EXPECTED_UNMAPPED_COUNT} unmapped)
 * **Rule Collisions Documented:** {EXPECTED_COLLISION_COUNT} multi-match patterns across distinct classes
-* **Stratified Pilot Size:** {EXPECTED_PILOT_SIZE} instances (exactly 20 per class across 16 classes)
+* **Stratified Pilot Size:** {EXPECTED_PILOT_SIZE} instances (exactly 20 per class across 16 weak-label strata)
 * **Pilot Split Allocation:** **{EXPECTED_PILOT_TRAIN} train**, **{EXPECTED_PILOT_VAL} validation**, **{EXPECTED_PILOT_TEST} test**
 * **Near-Duplicate Cluster Exclusivity:** **{EXPECTED_PILOT_UNIQUE_CLUSTERS} distinct clusters** across {EXPECTED_PILOT_SIZE} instances (zero template leakage)
 * **Blinded Human Annotation Sheets:** Generated for Rater 1 and Rater 2 with zero CFPB metadata leakage

@@ -166,8 +166,8 @@ def run_pipeline() -> Dict[str, Any]:
     print(f"Mapped: {collision_res['mapped_count']} | Unmapped: {collision_res['unmapped_count']}")
     print(f"Multi-Pattern Rule Collisions Identified: {collision_res['collision_count']}")
 
-    # 2. Stratified Sampling of 320 Records (Quotas & Cluster Exclusivity)
-    print("\n[Step 2/5] Sampling Stratified Pilot with Strict Domain x Split Quotas & Cluster Dedup...")
+    # 2. Stratified Sampling of 320 Records (Per-Class Split Quotas & Cluster Exclusivity)
+    print("\n[Step 2/5] Sampling Stratified Pilot with Per-Class Split Quotas & Cluster Dedup...")
     samples = auditor.sample_stratified_pilot()
     os.makedirs(os.path.dirname(PILOT_MANIFEST_PATH), exist_ok=True)
 
@@ -293,7 +293,7 @@ def generate_protocol_report(
 **Project:** Cross-Domain Complaint Understanding via Multilingual Encoders  
 **Phase:** Phase 6 (Label Taxonomy Codebook, Source Mapping Audit, and Annotation Protocol)  
 **Status:** **PROTOCOL SPECIFICATION & SYNTHETIC SIMULATION BENCHMARK (NON-HUMAN)**  
-**Target Sample Size ($N$):** 320 Stratified Instances across 16 Classes  
+**Target Sample Size ($N$):** **320** Stratified Instances across 16 Weak-Label Strata  
 
 ---
 
@@ -310,14 +310,14 @@ def generate_protocol_report(
 
 The pilot sample manifest [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) was generated from `canonical_dataset.parquet` under strict multi-dimensional constraints:
 
-1. **Class Balance:** Exactly **20 instances per class** across all 16 intent classes ($N = 320$).
-2. **Domain $\\times$ Split Allocation:** Each class strictly allocates:
+1. **Class Balance:** Exactly **20 instances per class** across 16 CFPB weak-label strata ($N = 320$).
+2. **Per-Class Split Quotas with Domain Rotation:** Across the 16 CFPB weak-label strata (administrative metadata categories, not human-validated semantic classes), each class strictly allocates:
    * **`train`:** **14 instances** (70.0% of class sample)
    * **`validation`:** **3 instances** (15.0% of class sample)
    * **`test`:** **3 instances** (15.0% of class sample)
    * **Corpus Totals:** **224 train**, **48 validation**, **48 test** instances.
+   * **Domain Allocation:** Within each split pool, records are allocated across available product domains via round-robin rotation (not fixed domain x split cell quotas).
 3. **Cluster Exclusivity & Leakage Prevention:** Every sampled instance belongs to a **unique `cluster_id`** (verified **320 distinct clusters** across 320 instances). No templated duplicate clusters (such as large credit repair components) can have multiple representatives in the pilot.
-4. **Domain Stratification:** Within each split pool, records are sampled across all available product domains via round-robin allocation.
 
 ---
 
@@ -332,23 +332,30 @@ To conduct genuine human adjudication in accordance with the maintainer review, 
 ### Blinding & Independence Guarantees
 1. Raters receive **only** `pilot_id`, `example_id`, and unconstrained `text_normalized`.
 2. All CFPB metadata (`Product`, `Issue`, `Sub-issue`, `domain`, `split`, and weak intent labels) are **completely stripped**.
-3. Raters annotate independently using [`docs/taxonomy_codebook.md`](file:///d:/NLP/docs/taxonomy_codebook.md).
-4. Submissions are immutable. Adjudication occurs only after both raters lock their sheets.
+3. Adjudicators receive the complete, unconstrained narrative (`text_normalized`) in [`data/annotation/adjudication_template.csv`](file:///d:/NLP/data/annotation/adjudication_template.csv) without truncation.
+4. Raters annotate independently using [`docs/taxonomy_codebook.md`](file:///d:/NLP/docs/taxonomy_codebook.md).
+5. Submissions are immutable. Adjudication occurs only after both raters lock their sheets.
 
 ---
 
-## 3. Synthetic Heuristic Simulation (Pipeline Demonstration Only)
+## 3. Synthetic Pipeline Demonstration & Non-Evidential Software Fixture
 
-To test the evaluation pipeline without fabricating human credentials, a synthetic text-heuristic model was executed against `text_normalized` (without access to weak labels). The results are stored in [`data/manifests/synthetic_pilot_simulation.csv`](file:///d:/NLP/data/manifests/synthetic_pilot_simulation.csv):
+To verify software plumbing, blinded instrument generation, schema contracts, and evaluation code without fabricating human annotations, an automated text-heuristic rule pass was executed against `text_normalized`. The resulting software fixture is committed in [`data/manifests/synthetic_pilot_simulation.csv`](file:///d:/NLP/data/manifests/synthetic_pilot_simulation.csv):
 
-| Metric | Synthetic Simulation Value | Note / Interpretation |
+> [!WARNING]
+> **Strict Non-Evidential Limitation:**  
+> The metrics below are non-evidential software fixtures designed exclusively for end-to-end integration testing:
+> 1. **No Gold Labels or Misalignment Estimates:** Because simulated labels are generated by deterministic keyword rules rather than human annotators, divergence between CFPB administrative labels and the heuristic simulation cannot estimate actual CFPB weak-label error or establish semantic misalignment. Any divergence reflects solely the disparity between static metadata and an arbitrary keyword script.
+> 2. **No Empirical Multi-Issue or Ambiguity Rates:** Simulated multi-issue and ambiguity flags are heuristic artifact counts, not empirical estimates of human semantic complexity.
+> 3. **No Empirical Inter-Annotator Agreement:** Simulated agreement ($P_o = {sim_metrics['raw_inter_annotator_agreement'] * 100:.2f}\%$, $\kappa = {sim_metrics['cohens_kappa_inter_annotator']:.4f}$) measures only the internal consistency of automated rules, not human consensus.
+
+| Metric | Value | Characterization |
 | :--- | :---: | :--- |
-| **Provenance Tag** | `synthetic_rule_simulation` | **Non-human software pipeline test** |
-| **Simulated Rater Agreement ($P_o$)** | **{sim_metrics['raw_inter_annotator_agreement'] * 100:.2f}%** | Heuristic consistency test ({sim_metrics['raw_inter_annotator_agree_count']}/320) |
-| **Simulated Cohen's Kappa (κ)** | **{sim_metrics['cohens_kappa_inter_annotator']:.4f}** | Automated rule convergence benchmark |
-| **Weak CFPB vs. Simulated Divergence** | **{sim_metrics['divergence_rate'] * 100:.2f}%** | Demonstrates potential misalignment ({sim_metrics['divergence_count']}/320) |
-| **Multi-Issue Prevalence** | **{sim_metrics['multi_issue_rate'] * 100:.2f}%** | Simulated detection of multi-claim narratives ({sim_metrics['multi_issue_count']}/320) |
-| **Ambiguity Rate** | **{sim_metrics['ambiguous_rate'] * 100:.2f}%** | Narratives under length/intelligibility threshold |
+| **Provenance Tag** | `synthetic_rule_simulation` | Machine-readable tag; non-human pipeline fixture |
+| **Simulated Rule Agreement ($P_o$)** | **{sim_metrics['raw_inter_annotator_agreement'] * 100:.2f}%** | Software rule consistency check ({sim_metrics['raw_inter_annotator_agree_count']}/320) |
+| **Simulated Rule Kappa (κ)** | **{sim_metrics['cohens_kappa_inter_annotator']:.4f}** | Automated rule convergence benchmark |
+| **Simulated Multi-Issue Heuristic Hits** | **{sim_metrics['multi_issue_rate'] * 100:.2f}%** | Rule-matched secondary keywords ({sim_metrics['multi_issue_count']}/320) — software fixture only |
+| **Simulated Ambiguity Heuristic Hits** | **{sim_metrics['ambiguous_rate'] * 100:.2f}%** | Narratives under character length threshold |
 
 ---
 
@@ -367,9 +374,9 @@ An automated audit of all **{collisions['total_mappings']}** distinct CFPB `Issu
 ## 5. Artifact Reference & Release Binding
 
 * **Annotation Codebook:** [`docs/taxonomy_codebook.md`](file:///d:/NLP/docs/taxonomy_codebook.md)
-* **Sampling Manifest:** [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) ($N = 320$, 224 train / 48 val / 48 test, 320 unique clusters)
+* **Sampling Manifest:** [`data/manifests/label_pilot_sampling_manifest.csv`](file:///d:/NLP/data/manifests/label_pilot_sampling_manifest.csv) ($N = 320$, 224 train / 48 val / 48 test across 16 weak-label strata, 320 unique clusters)
 * **Blinded Rater Sheets:** [`data/annotation/rater_1_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_1_blinded_sheet.csv), [`data/annotation/rater_2_blinded_sheet.csv`](file:///d:/NLP/data/annotation/rater_2_blinded_sheet.csv)
-* **Adjudication Template:** [`data/annotation/adjudication_template.csv`](file:///d:/NLP/data/annotation/adjudication_template.csv)
+* **Adjudication Template (Full Text):** [`data/annotation/adjudication_template.csv`](file:///d:/NLP/data/annotation/adjudication_template.csv)
 * **Synthetic Simulation Artifact:** [`data/manifests/synthetic_pilot_simulation.csv`](file:///d:/NLP/data/manifests/synthetic_pilot_simulation.csv)
 """
 

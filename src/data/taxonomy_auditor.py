@@ -173,9 +173,9 @@ class TaxonomyAuditor:
         """Samples a deterministic, stratified pilot dataset (N = 320).
         
         Enforces:
-        1. Exactly 20 records per class across all 16 classes.
-        2. Strict split quotas per class: 14 train, 3 validation, 3 test (224 train, 48 val, 48 test total).
-        3. Round-robin domain balance within each split pool.
+        1. Exactly 20 records per class across all 16 weak-label strata (derived from administrative metadata, not human-validated semantic classes).
+        2. Strict split quotas per class: 14 train, 3 validation, 3 test (224 train, 48 val, 48 test total across the 16 weak-label strata).
+        3. Round-robin domain rotation within each split pool (not fixed domain x split cell quotas).
         4. Near-duplicate cluster exclusivity: at most 1 instance per cluster_id (320 unique clusters).
         """
         import pandas as pd
@@ -302,11 +302,11 @@ class TaxonomyAuditor:
                         "rationale": "",
                     })
 
-        # Adjudication template
+        # Adjudication template - complete narrative preserved without truncation
         adj_fieldnames = [
             "pilot_id",
             "example_id",
-            "text_sample",
+            "text_normalized",
             "rater_1_label",
             "rater_2_label",
             "raw_agreement",
@@ -324,7 +324,7 @@ class TaxonomyAuditor:
                 writer.writerow({
                     "pilot_id": r["pilot_id"],
                     "example_id": r["example_id"],
-                    "text_sample": r["text_normalized"][:200].replace("\n", " "),
+                    "text_normalized": r["text_normalized"],
                     "rater_1_label": "",
                     "rater_2_label": "",
                     "raw_agreement": "",
@@ -341,8 +341,8 @@ class TaxonomyAuditor:
     def audit_annotation_provenance(self, file_path: str) -> Dict[str, Any]:
         """Audits the provenance and integrity of an adjudication / simulation file.
         
-        Verifies whether the file is a genuine human adjudication or a synthetic demonstration,
-        preventing simulated outputs from being falsely presented as human gold labels.
+        Fails closed: requires an explicit recognized provenance tag across every row,
+        rejecting missing, unrecognized, mixed, or inconsistent provenance values.
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -353,25 +353,36 @@ class TaxonomyAuditor:
         if not reader:
             raise ValueError(f"File is empty: {file_path}")
 
+        valid_provenances = {PROVENANCE_SYNTHETIC, PROVENANCE_HUMAN}
+
+        row_provenances = set()
+        for idx, row in enumerate(reader, start=1):
+            if "provenance" not in row:
+                raise ValueError(f"Missing required 'provenance' column in file: {file_path}")
+            prov = row["provenance"].strip()
+            if not prov:
+                raise ValueError(f"Row {idx} has missing or empty 'provenance' value in {file_path}")
+            if prov not in valid_provenances:
+                raise ValueError(
+                    f"Row {idx} has unrecognized provenance '{prov}' in {file_path}. Allowed: {sorted(valid_provenances)}"
+                )
+            row_provenances.add(prov)
+
+        if len(row_provenances) > 1:
+            raise ValueError(f"Mixed/inconsistent provenance detected in {file_path}: {sorted(row_provenances)}")
+
+        unique_provenance = row_provenances.pop()
         first_row = reader[0]
-        provenance = first_row.get("provenance", "").strip()
-
-        # Check if rater columns exist
-        has_ann1 = "annotator_1_label" in first_row or "rater_1_label" in first_row
-        has_ann2 = "annotator_2_label" in first_row or "rater_2_label" in first_row
-        has_adj = "adjudicated_label" in first_row
-
-        is_synthetic = (
-            provenance == PROVENANCE_SYNTHETIC
-            or "synthetic" in file_path.lower()
-            or any("synthetic" in str(v).lower() for v in first_row.values())
-        )
+        has_ann1 = bool(first_row.get("annotator_1_label") or first_row.get("rater_1_label"))
+        has_ann2 = bool(first_row.get("annotator_2_label") or first_row.get("rater_2_label"))
+        has_adj = bool(first_row.get("adjudicated_label"))
 
         return {
             "file_path": file_path,
             "row_count": len(reader),
-            "provenance": PROVENANCE_SYNTHETIC if is_synthetic else (provenance or PROVENANCE_HUMAN),
-            "is_synthetic": is_synthetic,
+            "provenance": unique_provenance,
+            "is_synthetic": unique_provenance == PROVENANCE_SYNTHETIC,
+            "is_human": unique_provenance == PROVENANCE_HUMAN,
             "has_raters": has_ann1 and has_ann2 and has_adj,
         }
 
