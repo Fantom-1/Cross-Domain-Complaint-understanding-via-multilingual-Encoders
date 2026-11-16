@@ -53,6 +53,9 @@ from src.data.taxonomy_auditor import (
 )
 
 
+CANONICAL_PARQUET = os.path.join(REPO_ROOT, "data", "processed", "canonical_dataset.parquet")
+
+
 class TestPhase6Taxonomy(unittest.TestCase):
     """Unit and regression tests for Phase 6 taxonomy, audit, and pilot adjudication."""
 
@@ -121,6 +124,8 @@ class TestPhase6Taxonomy(unittest.TestCase):
 
     def test_05_stratified_pilot_sampling_size_and_balance(self):
         """Asserts stratified sampling produces exactly 320 records (20 per class)."""
+        if not os.path.isfile(CANONICAL_PARQUET):
+            self.skipTest("canonical_dataset.parquet untracked locally (CI mode)")
         samples = self.auditor.sample_stratified_pilot()
         self.assertEqual(len(samples), EXPECTED_PILOT_SIZE)
 
@@ -128,6 +133,37 @@ class TestPhase6Taxonomy(unittest.TestCase):
         self.assertEqual(len(counts), EXPECTED_CLASS_COUNT)
         for cls_name, cnt in counts.items():
             self.assertEqual(cnt, EXPECTED_PILOT_PER_CLASS, f"Class {cls_name} count must be {EXPECTED_PILOT_PER_CLASS}")
+
+    def test_05b_synthetic_stratified_pilot_sampling(self):
+        """Asserts stratified sampling logic on synthetic DataFrame fixture (runs in both CI and local)."""
+        import pandas as pd
+        synth_rows = []
+        for c in self.auditor.class_names:
+            for i in range(25):
+                synth_rows.append({
+                    "example_id": f"syn_{c}_{i}",
+                    "text_normalized": f"Complaint narrative text for class {c} instance {i}",
+                    "text_hash": f"hash_{c}_{i:03d}",
+                    "domain": f"domain_{i % 3}",
+                    "source_label": f"Source {c}",
+                    "intent_label": c,
+                    "split": "train" if i < 18 else ("validation" if i < 21 else "test"),
+                    "group_id": f"grp_{c}_{i}"
+                })
+        synth_df = pd.DataFrame(synth_rows)
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
+            tmp_parquet = tmp.name
+        try:
+            synth_df.to_parquet(tmp_parquet)
+            samples = self.auditor.sample_stratified_pilot(parquet_path=tmp_parquet)
+            self.assertEqual(len(samples), EXPECTED_PILOT_SIZE)
+            counts = collections.Counter(s["weak_cfpb_label"] for s in samples)
+            self.assertEqual(len(counts), EXPECTED_CLASS_COUNT)
+            for cls_name, cnt in counts.items():
+                self.assertEqual(cnt, EXPECTED_PILOT_PER_CLASS)
+        finally:
+            if os.path.exists(tmp_parquet):
+                os.remove(tmp_parquet)
 
     def test_06_stratified_pilot_unique_example_ids(self):
         """Asserts all 320 example_ids in the pilot sampling manifest are distinct."""
@@ -220,6 +256,8 @@ class TestPhase6Taxonomy(unittest.TestCase):
 
     def test_14_cross_process_pilot_sampling_determinism(self):
         """Asserts sample_stratified_pilot produces identical outputs under different PYTHONHASHSEED."""
+        if not os.path.isfile(CANONICAL_PARQUET):
+            self.skipTest("canonical_dataset.parquet untracked locally (CI mode)")
         sub_code = """
 import json, sys
 from src.data.taxonomy_auditor import TaxonomyAuditor
@@ -237,6 +275,46 @@ print(json.dumps(eids))
         self.assertEqual(p1.returncode, 0, f"Process 1 failed: {p1.stderr}")
         self.assertEqual(p2.returncode, 0, f"Process 2 failed: {p2.stderr}")
         self.assertEqual(p1.stdout.strip(), p2.stdout.strip(), "Pilot sampling must be bit-for-bit identical across processes")
+
+    def test_14b_synthetic_cross_process_determinism(self):
+        """Asserts cross-process determinism on synthetic data (runs in both CI and local)."""
+        sub_code = """
+import json, sys, tempfile, os
+import pandas as pd
+from src.data.taxonomy_auditor import TaxonomyAuditor
+auditor = TaxonomyAuditor()
+synth_rows = []
+for c in auditor.class_names:
+    for i in range(25):
+        synth_rows.append({
+            'example_id': f'syn_{c}_{i}',
+            'text_normalized': f'Complaint narrative {c} {i}',
+            'text_hash': f'hash_{c}_{i:03d}',
+            'domain': f'domain_{i % 3}',
+            'source_label': f'Source {c}',
+            'intent_label': c,
+            'split': 'train',
+            'group_id': f'grp_{c}_{i}'
+        })
+with tempfile.NamedTemporaryFile(suffix='.parquet', delete=False) as tmp:
+    tpath = tmp.name
+try:
+    pd.DataFrame(synth_rows).to_parquet(tpath)
+    samples = auditor.sample_stratified_pilot(parquet_path=tpath)
+    print(json.dumps([s['example_id'] for s in samples]))
+finally:
+    if os.path.exists(tpath):
+        os.remove(tpath)
+"""
+        env1 = dict(os.environ, PYTHONHASHSEED="0")
+        env2 = dict(os.environ, PYTHONHASHSEED="99999")
+
+        p1 = subprocess.run([sys.executable, "-c", sub_code], capture_output=True, text=True, env=env1)
+        p2 = subprocess.run([sys.executable, "-c", sub_code], capture_output=True, text=True, env=env2)
+
+        self.assertEqual(p1.returncode, 0, f"Process 1 failed: {p1.stderr}")
+        self.assertEqual(p2.returncode, 0, f"Process 2 failed: {p2.stderr}")
+        self.assertEqual(p1.stdout.strip(), p2.stdout.strip(), "Synthetic sampling must be bit-for-bit identical across processes")
 
     # -------------------------------------------------------------------------
     # Failure Injection Tests (15-20) Isolated to Temporary Report Files
