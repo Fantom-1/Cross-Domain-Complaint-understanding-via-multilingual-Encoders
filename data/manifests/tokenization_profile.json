@@ -1,0 +1,1420 @@
+{
+  "metadata": {
+    "pipeline_phase": "Phase 4 - Subword Tokenization Profiling",
+    "timestamp_utc": "2026-11-15T11:25:08.135997+00:00",
+    "tokenizer_checkpoint": "facebook/xlm-v-base",
+    "tokenizer_revision": "68c75dd7733d2640b3a98114e3e94196dc543fe1",
+    "tokenizer_type": "XLMRobertaTokenizer",
+    "vocab_size": 901629,
+    "transformers_version": "5.21.0",
+    "tokenizer_asset_hashes": {
+      "config.json": "25ed3e0d067ca06706bb76a597856c9ac7ba67559d4b2cf0e3f3f5052efd47e2",
+      "sentencepiece.bpe.model": "dbee9f6b1c2cba29b335e70d6088eea943c7d5ae55ac7dd17174760bf758e309",
+      "tokenizer.json": "43f949ef0c0b1ac18c506551109383d4a8a2bd48956ced0cc95cfd9120d42dca"
+    },
+    "mock_mode": false,
+    "environment": {
+      "platform": "Windows-11-10.0.26300-SP0",
+      "python_version": "3.12.16"
+    },
+    "cutoffs": [
+      128,
+      256,
+      384,
+      512
+    ],
+    "percentiles": [
+      25.0,
+      50.0,
+      75.0,
+      90.0,
+      95.0,
+      99.0
+    ]
+  },
+  "governance_scope": {
+    "supervision_status": "CFPB Issue/Sub-issue mappings are weak administrative supervision",
+    "auxiliary_benchmark": "Banking77 is an auxiliary-only intent classification benchmark",
+    "generalization_boundary": "No evidence of multilingual or held-out cross-domain generalization is claimed",
+    "metric_isolation": "Subword token measurements are strictly distinguished from lexical whitespace word counts",
+    "ratio_definition": "content_subword_ratio strictly excludes special tokens (<s>, </s>); sequence_subword_ratio includes special tokens."
+  },
+  "canonical_cfpb": {
+    "source_parquet_path": "data/processed/canonical_dataset.parquet",
+    "source_sha256": "b591ba980a99ba820ec8e42676cba75afa0ee2222725e1917ea8d94036e0c463",
+    "total_instances": 45723,
+    "text_normalized_overall": {
+      "count": 45723,
+      "min": 22,
+      "max": 12673,
+      "mean": 323.75,
+      "std": 394.82,
+      "percentiles": {
+        "p25": 119.0,
+        "p50": 217.0,
+        "p75": 389.0,
+        "p90": 665.0,
+        "p95": 931.0,
+        "p99": 1764.12
+      },
+      "truncation_coverage": {
+        "128": {
+          "cutoff": 128,
+          "truncated_count": 33042,
+          "truncated_percent": 72.27,
+          "retained_coverage_percent": 27.73,
+          "retained_token_percent": 35.44
+        },
+        "256": {
+          "cutoff": 256,
+          "truncated_count": 19360,
+          "truncated_percent": 42.34,
+          "retained_coverage_percent": 57.66,
+          "retained_token_percent": 57.61
+        },
+        "384": {
+          "cutoff": 384,
+          "truncated_count": 11655,
+          "truncated_percent": 25.49,
+          "retained_coverage_percent": 74.51,
+          "retained_token_percent": 70.71
+        },
+        "512": {
+          "cutoff": 512,
+          "truncated_count": 7298,
+          "truncated_percent": 15.96,
+          "retained_coverage_percent": 84.04,
+          "retained_token_percent": 78.77
+        }
+      },
+      "content_subword_ratio": {
+        "mean": 1.437,
+        "median": 1.35,
+        "p90": 1.81,
+        "min": 1.0,
+        "max": 11.316
+      },
+      "sequence_subword_ratio": {
+        "mean": 1.456,
+        "median": 1.37,
+        "p90": 1.83,
+        "min": 1.022,
+        "max": 11.351
+      }
+    },
+    "text_original_overall": {
+      "count": 45723,
+      "min": 22,
+      "max": 8049,
+      "mean": 276.76,
+      "std": 328.3,
+      "percentiles": {
+        "p25": 104.0,
+        "p50": 188.0,
+        "p75": 333.0,
+        "p90": 561.0,
+        "p95": 789.0,
+        "p99": 1499.56
+      },
+      "truncation_coverage": {
+        "128": {
+          "cutoff": 128,
+          "truncated_count": 30612,
+          "truncated_percent": 66.95,
+          "retained_coverage_percent": 33.05,
+          "retained_token_percent": 40.42
+        },
+        "256": {
+          "cutoff": 256,
+          "truncated_count": 16379,
+          "truncated_percent": 35.82,
+          "retained_coverage_percent": 64.18,
+          "retained_token_percent": 63.41
+        },
+        "384": {
+          "cutoff": 384,
+          "truncated_count": 9115,
+          "truncated_percent": 19.94,
+          "retained_coverage_percent": 80.06,
+          "retained_token_percent": 75.9
+        },
+        "512": {
+          "cutoff": 512,
+          "truncated_count": 5422,
+          "truncated_percent": 11.86,
+          "retained_coverage_percent": 88.14,
+          "retained_token_percent": 83.1
+        }
+      },
+      "content_subword_ratio": {
+        "mean": 1.225,
+        "median": 1.2,
+        "p90": 1.36,
+        "min": 1.0,
+        "max": 3.947
+      },
+      "sequence_subword_ratio": {
+        "mean": 1.244,
+        "median": 1.21,
+        "p90": 1.38,
+        "min": 1.022,
+        "max": 3.982
+      }
+    },
+    "by_split": {
+      "test": {
+        "count": 6852,
+        "min": 22,
+        "max": 4187,
+        "mean": 315.69,
+        "std": 331.68,
+        "percentiles": {
+          "p25": 121.0,
+          "p50": 219.0,
+          "p75": 390.0,
+          "p90": 648.8,
+          "p95": 895.45,
+          "p99": 1619.0
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 4989,
+            "truncated_percent": 72.81,
+            "retained_coverage_percent": 27.19,
+            "retained_token_percent": 36.42
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 2945,
+            "truncated_percent": 42.98,
+            "retained_coverage_percent": 57.02,
+            "retained_token_percent": 59.41
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 1753,
+            "truncated_percent": 25.58,
+            "retained_coverage_percent": 74.42,
+            "retained_token_percent": 72.97
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 1051,
+            "truncated_percent": 15.34,
+            "retained_coverage_percent": 84.66,
+            "retained_token_percent": 81.15
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.445,
+          "median": 1.36,
+          "p90": 1.81,
+          "min": 1.0,
+          "max": 6.45
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.464,
+          "median": 1.37,
+          "p90": 1.84,
+          "min": 1.032,
+          "max": 6.55
+        }
+      },
+      "train": {
+        "count": 32019,
+        "min": 22,
+        "max": 12673,
+        "mean": 325.02,
+        "std": 405.79,
+        "percentiles": {
+          "p25": 119.0,
+          "p50": 216.0,
+          "p75": 388.0,
+          "p90": 668.0,
+          "p95": 944.0,
+          "p99": 1801.92
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 23111,
+            "truncated_percent": 72.18,
+            "retained_coverage_percent": 27.82,
+            "retained_token_percent": 35.33
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 13456,
+            "truncated_percent": 42.03,
+            "retained_coverage_percent": 57.97,
+            "retained_token_percent": 57.31
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 8105,
+            "truncated_percent": 25.31,
+            "retained_coverage_percent": 74.69,
+            "retained_token_percent": 70.25
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 5119,
+            "truncated_percent": 15.99,
+            "retained_coverage_percent": 84.01,
+            "retained_token_percent": 78.24
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.435,
+          "median": 1.35,
+          "p90": 1.8,
+          "min": 1.0,
+          "max": 11.316
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.454,
+          "median": 1.37,
+          "p90": 1.82,
+          "min": 1.022,
+          "max": 11.351
+        }
+      },
+      "validation": {
+        "count": 6852,
+        "min": 22,
+        "max": 8184,
+        "mean": 325.87,
+        "std": 400.78,
+        "percentiles": {
+          "p25": 118.0,
+          "p50": 220.0,
+          "p75": 398.0,
+          "p90": 664.9,
+          "p95": 924.0,
+          "p99": 1776.49
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 4942,
+            "truncated_percent": 72.12,
+            "retained_coverage_percent": 27.88,
+            "retained_token_percent": 34.99
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 2959,
+            "truncated_percent": 43.18,
+            "retained_coverage_percent": 56.82,
+            "retained_token_percent": 57.28
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 1797,
+            "truncated_percent": 26.23,
+            "retained_coverage_percent": 73.77,
+            "retained_token_percent": 70.7
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 1128,
+            "truncated_percent": 16.46,
+            "retained_coverage_percent": 83.54,
+            "retained_token_percent": 78.98
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.436,
+          "median": 1.35,
+          "p90": 1.81,
+          "min": 1.0,
+          "max": 8.204
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.455,
+          "median": 1.36,
+          "p90": 1.83,
+          "min": 1.028,
+          "max": 8.226
+        }
+      }
+    },
+    "by_intent": {
+      "account_access": {
+        "count": 3000,
+        "min": 23,
+        "max": 7174,
+        "mean": 318.09,
+        "std": 356.21,
+        "percentiles": {
+          "p25": 126.0,
+          "p50": 222.0,
+          "p75": 380.0,
+          "p90": 634.2,
+          "p95": 886.1,
+          "p99": 1655.45
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2221,
+            "truncated_percent": 74.03,
+            "retained_coverage_percent": 25.97,
+            "retained_token_percent": 36.64
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1277,
+            "truncated_percent": 42.57,
+            "retained_coverage_percent": 57.43,
+            "retained_token_percent": 59.79
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 735,
+            "truncated_percent": 24.5,
+            "retained_coverage_percent": 75.5,
+            "retained_token_percent": 73.0
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 455,
+            "truncated_percent": 15.17,
+            "retained_coverage_percent": 84.83,
+            "retained_token_percent": 80.95
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.357,
+          "median": 1.3,
+          "p90": 1.65,
+          "min": 1.0,
+          "max": 5.696
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.374,
+          "median": 1.31,
+          "p90": 1.67,
+          "min": 1.036,
+          "max": 5.783
+        }
+      },
+      "account_management": {
+        "count": 3000,
+        "min": 24,
+        "max": 8138,
+        "mean": 357.97,
+        "std": 406.14,
+        "percentiles": {
+          "p25": 142.0,
+          "p50": 257.0,
+          "p75": 426.25,
+          "p90": 718.6,
+          "p95": 987.05,
+          "p99": 1844.37
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2346,
+            "truncated_percent": 78.2,
+            "retained_coverage_percent": 21.8,
+            "retained_token_percent": 32.89
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1506,
+            "truncated_percent": 50.2,
+            "retained_coverage_percent": 49.8,
+            "retained_token_percent": 55.57
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 882,
+            "truncated_percent": 29.4,
+            "retained_coverage_percent": 70.6,
+            "retained_token_percent": 69.63
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 550,
+            "truncated_percent": 18.33,
+            "retained_coverage_percent": 81.67,
+            "retained_token_percent": 77.97
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.41,
+          "median": 1.35,
+          "p90": 1.73,
+          "min": 1.0,
+          "max": 5.099
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.426,
+          "median": 1.36,
+          "p90": 1.75,
+          "min": 1.031,
+          "max": 5.101
+        }
+      },
+      "application_problem": {
+        "count": 3000,
+        "min": 25,
+        "max": 12673,
+        "mean": 396.37,
+        "std": 487.89,
+        "percentiles": {
+          "p25": 146.0,
+          "p50": 269.0,
+          "p75": 478.0,
+          "p90": 820.2,
+          "p95": 1138.15,
+          "p99": 2046.67
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2365,
+            "truncated_percent": 78.83,
+            "retained_coverage_percent": 21.17,
+            "retained_token_percent": 29.84
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1551,
+            "truncated_percent": 51.7,
+            "retained_coverage_percent": 48.3,
+            "retained_token_percent": 50.85
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 1025,
+            "truncated_percent": 34.17,
+            "retained_coverage_percent": 65.83,
+            "retained_token_percent": 64.57
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 675,
+            "truncated_percent": 22.5,
+            "retained_coverage_percent": 77.5,
+            "retained_token_percent": 73.52
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.391,
+          "median": 1.34,
+          "p90": 1.7,
+          "min": 1.0,
+          "max": 3.515
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.407,
+          "median": 1.35,
+          "p90": 1.72,
+          "min": 1.035,
+          "max": 3.544
+        }
+      },
+      "closing_process": {
+        "count": 1661,
+        "min": 23,
+        "max": 8471,
+        "mean": 517.32,
+        "std": 614.71,
+        "percentiles": {
+          "p25": 208.0,
+          "p50": 338.0,
+          "p75": 616.0,
+          "p90": 1065.0,
+          "p95": 1514.0,
+          "p99": 2867.2
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1461,
+            "truncated_percent": 87.96,
+            "retained_coverage_percent": 12.04,
+            "retained_token_percent": 23.78
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1066,
+            "truncated_percent": 64.18,
+            "retained_coverage_percent": 35.82,
+            "retained_token_percent": 42.86
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 738,
+            "truncated_percent": 44.43,
+            "retained_coverage_percent": 55.57,
+            "retained_token_percent": 56.05
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 513,
+            "truncated_percent": 30.89,
+            "retained_coverage_percent": 69.11,
+            "retained_token_percent": 65.28
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.461,
+          "median": 1.4,
+          "p90": 1.81,
+          "min": 1.038,
+          "max": 4.686
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.473,
+          "median": 1.41,
+          "p90": 1.82,
+          "min": 1.062,
+          "max": 4.696
+        }
+      },
+      "credit_terms_dispute": {
+        "count": 3000,
+        "min": 23,
+        "max": 5346,
+        "mean": 324.04,
+        "std": 304.95,
+        "percentiles": {
+          "p25": 145.0,
+          "p50": 245.5,
+          "p75": 399.0,
+          "p90": 632.1,
+          "p95": 857.05,
+          "p99": 1490.14
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2390,
+            "truncated_percent": 79.67,
+            "retained_coverage_percent": 20.33,
+            "retained_token_percent": 36.72
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1423,
+            "truncated_percent": 47.43,
+            "retained_coverage_percent": 52.57,
+            "retained_token_percent": 61.64
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 801,
+            "truncated_percent": 26.7,
+            "retained_coverage_percent": 73.3,
+            "retained_token_percent": 75.87
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 448,
+            "truncated_percent": 14.93,
+            "retained_coverage_percent": 85.07,
+            "retained_token_percent": 83.84
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.394,
+          "median": 1.33,
+          "p90": 1.71,
+          "min": 1.0,
+          "max": 5.192
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.41,
+          "median": 1.34,
+          "p90": 1.72,
+          "min": 1.03,
+          "max": 5.269
+        }
+      },
+      "debt_communication": {
+        "count": 3000,
+        "min": 22,
+        "max": 6081,
+        "mean": 244.1,
+        "std": 402.15,
+        "percentiles": {
+          "p25": 84.0,
+          "p50": 154.0,
+          "p75": 276.0,
+          "p90": 462.0,
+          "p95": 679.05,
+          "p99": 1368.46
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1749,
+            "truncated_percent": 58.3,
+            "retained_coverage_percent": 41.7,
+            "retained_token_percent": 43.32
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 842,
+            "truncated_percent": 28.07,
+            "retained_coverage_percent": 71.93,
+            "retained_token_percent": 65.11
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 441,
+            "truncated_percent": 14.7,
+            "retained_coverage_percent": 85.3,
+            "retained_token_percent": 75.78
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 242,
+            "truncated_percent": 8.07,
+            "retained_coverage_percent": 91.93,
+            "retained_token_percent": 81.53
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.388,
+          "median": 1.31,
+          "p90": 1.77,
+          "min": 1.0,
+          "max": 3.92
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.413,
+          "median": 1.34,
+          "p90": 1.79,
+          "min": 1.048,
+          "max": 3.96
+        }
+      },
+      "debt_not_owed": {
+        "count": 3000,
+        "min": 23,
+        "max": 4874,
+        "mean": 243.24,
+        "std": 259.83,
+        "percentiles": {
+          "p25": 93.0,
+          "p50": 171.5,
+          "p75": 307.25,
+          "p90": 496.0,
+          "p95": 664.05,
+          "p99": 1143.06
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1872,
+            "truncated_percent": 62.4,
+            "retained_coverage_percent": 37.6,
+            "retained_token_percent": 44.79
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 962,
+            "truncated_percent": 32.07,
+            "retained_coverage_percent": 67.93,
+            "retained_token_percent": 68.87
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 518,
+            "truncated_percent": 17.27,
+            "retained_coverage_percent": 82.73,
+            "retained_token_percent": 81.41
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 275,
+            "truncated_percent": 9.17,
+            "retained_coverage_percent": 90.83,
+            "retained_token_percent": 88.31
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.453,
+          "median": 1.38,
+          "p90": 1.86,
+          "min": 1.0,
+          "max": 4.884
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.477,
+          "median": 1.4,
+          "p90": 1.88,
+          "min": 1.033,
+          "max": 4.907
+        }
+      },
+      "debt_threats": {
+        "count": 3000,
+        "min": 22,
+        "max": 8327,
+        "mean": 321.31,
+        "std": 403.48,
+        "percentiles": {
+          "p25": 120.0,
+          "p50": 212.0,
+          "p75": 383.25,
+          "p90": 639.0,
+          "p95": 936.15,
+          "p99": 1805.06
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2165,
+            "truncated_percent": 72.17,
+            "retained_coverage_percent": 27.83,
+            "retained_token_percent": 35.91
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1241,
+            "truncated_percent": 41.37,
+            "retained_coverage_percent": 58.63,
+            "retained_token_percent": 58.0
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 749,
+            "truncated_percent": 24.97,
+            "retained_coverage_percent": 75.03,
+            "retained_token_percent": 70.93
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 457,
+            "truncated_percent": 15.23,
+            "retained_coverage_percent": 84.77,
+            "retained_token_percent": 78.97
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.445,
+          "median": 1.37,
+          "p90": 1.83,
+          "min": 1.0,
+          "max": 4.788
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.464,
+          "median": 1.39,
+          "p90": 1.85,
+          "min": 1.046,
+          "max": 4.818
+        }
+      },
+      "fraud_or_scam": {
+        "count": 3000,
+        "min": 23,
+        "max": 7134,
+        "mean": 326.36,
+        "std": 435.35,
+        "percentiles": {
+          "p25": 119.0,
+          "p50": 206.0,
+          "p75": 392.0,
+          "p90": 663.0,
+          "p95": 912.1,
+          "p99": 1779.35
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2150,
+            "truncated_percent": 71.67,
+            "retained_coverage_percent": 28.33,
+            "retained_token_percent": 34.9
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1219,
+            "truncated_percent": 40.63,
+            "retained_coverage_percent": 59.37,
+            "retained_token_percent": 56.17
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 767,
+            "truncated_percent": 25.57,
+            "retained_coverage_percent": 74.43,
+            "retained_token_percent": 68.95
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 506,
+            "truncated_percent": 16.87,
+            "retained_coverage_percent": 83.13,
+            "retained_token_percent": 77.18
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.446,
+          "median": 1.36,
+          "p90": 1.8,
+          "min": 1.0,
+          "max": 6.5
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.466,
+          "median": 1.38,
+          "p90": 1.83,
+          "min": 1.039,
+          "max": 6.523
+        }
+      },
+      "funds_availability": {
+        "count": 3000,
+        "min": 22,
+        "max": 10504,
+        "mean": 324.45,
+        "std": 408.18,
+        "percentiles": {
+          "p25": 121.0,
+          "p50": 220.0,
+          "p75": 390.25,
+          "p90": 652.0,
+          "p95": 897.0,
+          "p99": 1722.08
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2187,
+            "truncated_percent": 72.9,
+            "retained_coverage_percent": 27.1,
+            "retained_token_percent": 35.77
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1304,
+            "truncated_percent": 43.47,
+            "retained_coverage_percent": 56.53,
+            "retained_token_percent": 58.29
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 766,
+            "truncated_percent": 25.53,
+            "retained_coverage_percent": 74.47,
+            "retained_token_percent": 71.57
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 479,
+            "truncated_percent": 15.97,
+            "retained_coverage_percent": 84.03,
+            "retained_token_percent": 79.69
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.372,
+          "median": 1.32,
+          "p90": 1.69,
+          "min": 1.0,
+          "max": 3.739
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.39,
+          "median": 1.33,
+          "p90": 1.71,
+          "min": 1.028,
+          "max": 3.745
+        }
+      },
+      "payment_problem": {
+        "count": 3000,
+        "min": 22,
+        "max": 5975,
+        "mean": 400.17,
+        "std": 437.41,
+        "percentiles": {
+          "p25": 151.75,
+          "p50": 275.0,
+          "p75": 478.0,
+          "p90": 832.2,
+          "p95": 1140.15,
+          "p99": 2142.32
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2412,
+            "truncated_percent": 80.4,
+            "retained_coverage_percent": 19.6,
+            "retained_token_percent": 29.99
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1608,
+            "truncated_percent": 53.6,
+            "retained_coverage_percent": 46.4,
+            "retained_token_percent": 51.27
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 999,
+            "truncated_percent": 33.3,
+            "retained_coverage_percent": 66.7,
+            "retained_token_percent": 64.85
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 675,
+            "truncated_percent": 22.5,
+            "retained_coverage_percent": 77.5,
+            "retained_token_percent": 73.74
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.427,
+          "median": 1.36,
+          "p90": 1.76,
+          "min": 1.0,
+          "max": 4.414
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.442,
+          "median": 1.38,
+          "p90": 1.77,
+          "min": 1.034,
+          "max": 4.434
+        }
+      },
+      "reporting_improper_use": {
+        "count": 2062,
+        "min": 23,
+        "max": 5506,
+        "mean": 248.04,
+        "std": 325.87,
+        "percentiles": {
+          "p25": 88.0,
+          "p50": 155.0,
+          "p75": 281.0,
+          "p90": 511.9,
+          "p95": 745.0,
+          "p99": 1483.17
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1227,
+            "truncated_percent": 59.51,
+            "retained_coverage_percent": 40.49,
+            "retained_token_percent": 43.12
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 589,
+            "truncated_percent": 28.56,
+            "retained_coverage_percent": 71.44,
+            "retained_token_percent": 64.62
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 348,
+            "truncated_percent": 16.88,
+            "retained_coverage_percent": 83.12,
+            "retained_token_percent": 75.87
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 206,
+            "truncated_percent": 9.99,
+            "retained_coverage_percent": 90.01,
+            "retained_token_percent": 82.49
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.649,
+          "median": 1.39,
+          "p90": 2.36,
+          "min": 1.0,
+          "max": 11.316
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.676,
+          "median": 1.41,
+          "p90": 2.38,
+          "min": 1.022,
+          "max": 11.351
+        }
+      },
+      "reporting_incorrect_information": {
+        "count": 3000,
+        "min": 23,
+        "max": 3503,
+        "mean": 261.14,
+        "std": 309.68,
+        "percentiles": {
+          "p25": 90.0,
+          "p50": 163.0,
+          "p75": 295.25,
+          "p90": 550.1,
+          "p95": 867.2,
+          "p99": 1576.0
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1822,
+            "truncated_percent": 60.73,
+            "retained_coverage_percent": 39.27,
+            "retained_token_percent": 41.54
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 900,
+            "truncated_percent": 30.0,
+            "retained_coverage_percent": 70.0,
+            "retained_token_percent": 62.98
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 530,
+            "truncated_percent": 17.67,
+            "retained_coverage_percent": 82.33,
+            "retained_token_percent": 74.28
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 344,
+            "truncated_percent": 11.47,
+            "retained_coverage_percent": 88.53,
+            "retained_token_percent": 81.22
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.583,
+          "median": 1.43,
+          "p90": 2.19,
+          "min": 1.0,
+          "max": 6.45
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.608,
+          "median": 1.45,
+          "p90": 2.22,
+          "min": 1.032,
+          "max": 6.55
+        }
+      },
+      "reporting_investigation_dispute": {
+        "count": 3000,
+        "min": 23,
+        "max": 4226,
+        "mean": 231.38,
+        "std": 255.28,
+        "percentiles": {
+          "p25": 96.0,
+          "p50": 150.0,
+          "p75": 270.0,
+          "p90": 485.2,
+          "p95": 698.0,
+          "p99": 1282.03
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 1865,
+            "truncated_percent": 62.17,
+            "retained_coverage_percent": 37.83,
+            "retained_token_percent": 47.28
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 802,
+            "truncated_percent": 26.73,
+            "retained_coverage_percent": 73.27,
+            "retained_token_percent": 69.07
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 449,
+            "truncated_percent": 14.97,
+            "retained_coverage_percent": 85.03,
+            "retained_token_percent": 80.14
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 269,
+            "truncated_percent": 8.97,
+            "retained_coverage_percent": 91.03,
+            "retained_token_percent": 86.62
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.441,
+          "median": 1.34,
+          "p90": 1.91,
+          "min": 1.024,
+          "max": 6.905
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.465,
+          "median": 1.36,
+          "p90": 1.94,
+          "min": 1.051,
+          "max": 7.0
+        }
+      },
+      "servicing_dispute": {
+        "count": 3000,
+        "min": 24,
+        "max": 8184,
+        "mean": 364.78,
+        "std": 417.51,
+        "percentiles": {
+          "p25": 149.0,
+          "p50": 258.0,
+          "p75": 444.0,
+          "p90": 721.1,
+          "p95": 970.05,
+          "p99": 1911.06
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2396,
+            "truncated_percent": 79.87,
+            "retained_coverage_percent": 20.13,
+            "retained_token_percent": 32.63
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1515,
+            "truncated_percent": 50.5,
+            "retained_coverage_percent": 49.5,
+            "retained_token_percent": 55.27
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 935,
+            "truncated_percent": 31.17,
+            "retained_coverage_percent": 68.83,
+            "retained_token_percent": 69.29
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 594,
+            "truncated_percent": 19.8,
+            "retained_coverage_percent": 80.2,
+            "retained_token_percent": 78.07
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.406,
+          "median": 1.35,
+          "p90": 1.73,
+          "min": 1.0,
+          "max": 4.261
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.421,
+          "median": 1.36,
+          "p90": 1.75,
+          "min": 1.043,
+          "max": 4.271
+        }
+      },
+      "transaction_problem": {
+        "count": 3000,
+        "min": 25,
+        "max": 4187,
+        "mean": 363.95,
+        "std": 360.94,
+        "percentiles": {
+          "p25": 154.0,
+          "p50": 264.0,
+          "p75": 451.0,
+          "p90": 718.0,
+          "p95": 979.1,
+          "p99": 1916.28
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 2414,
+            "truncated_percent": 80.47,
+            "retained_coverage_percent": 19.53,
+            "retained_token_percent": 32.59
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 1555,
+            "truncated_percent": 51.83,
+            "retained_coverage_percent": 48.17,
+            "retained_token_percent": 55.82
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 972,
+            "truncated_percent": 32.4,
+            "retained_coverage_percent": 67.6,
+            "retained_token_percent": 70.39
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 610,
+            "truncated_percent": 20.33,
+            "retained_coverage_percent": 79.67,
+            "retained_token_percent": 79.49
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.444,
+          "median": 1.38,
+          "p90": 1.78,
+          "min": 1.0,
+          "max": 6.667
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.46,
+          "median": 1.39,
+          "p90": 1.8,
+          "min": 1.036,
+          "max": 6.727
+        }
+      }
+    }
+  },
+  "auxiliary_banking77": {
+    "train": {
+      "source_path": "data/raw/banking77/train.csv",
+      "source_sha256": "b06e26ac675513959a63135f11b94ea7786ed02da65db93a5650d8838cbc664b",
+      "total_instances": 10003,
+      "stats": {
+        "count": 10003,
+        "min": 4,
+        "max": 98,
+        "mean": 15.97,
+        "std": 9.18,
+        "percentiles": {
+          "p25": 11.0,
+          "p50": 13.0,
+          "p75": 17.0,
+          "p90": 27.0,
+          "p95": 36.0,
+          "p99": 52.0
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.179,
+          "median": 1.14,
+          "p90": 1.36,
+          "min": 1.0,
+          "max": 2.25
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.396,
+          "median": 1.36,
+          "p90": 1.62,
+          "min": 1.071,
+          "max": 3.0
+        }
+      }
+    },
+    "test": {
+      "source_path": "data/raw/banking77/test.csv",
+      "source_sha256": "d12d6e3bc4c3103966ae786dc435913c0c563dfa328f5a3646d0e62cfeeb474d",
+      "total_instances": 3080,
+      "stats": {
+        "count": 3080,
+        "min": 4,
+        "max": 80,
+        "mean": 14.82,
+        "std": 7.84,
+        "percentiles": {
+          "p25": 10.0,
+          "p50": 13.0,
+          "p75": 16.0,
+          "p90": 23.0,
+          "p95": 31.0,
+          "p99": 46.21
+        },
+        "truncation_coverage": {
+          "128": {
+            "cutoff": 128,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "256": {
+            "cutoff": 256,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "384": {
+            "cutoff": 384,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          },
+          "512": {
+            "cutoff": 512,
+            "truncated_count": 0,
+            "truncated_percent": 0.0,
+            "retained_coverage_percent": 100.0,
+            "retained_token_percent": 100.0
+          }
+        },
+        "content_subword_ratio": {
+          "mean": 1.181,
+          "median": 1.14,
+          "p90": 1.36,
+          "min": 1.0,
+          "max": 2.25
+        },
+        "sequence_subword_ratio": {
+          "mean": 1.411,
+          "median": 1.38,
+          "p90": 1.62,
+          "min": 1.093,
+          "max": 3.0
+        }
+      }
+    }
+  }
+}
