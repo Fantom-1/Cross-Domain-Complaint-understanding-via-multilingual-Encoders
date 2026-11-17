@@ -47,3 +47,7 @@ Phase 2/SERVER_PROFILE_PRIVATE.md
 *PRIVATE*
 *.pem
 *.key
+
+# scratch directory
+scratch/
+

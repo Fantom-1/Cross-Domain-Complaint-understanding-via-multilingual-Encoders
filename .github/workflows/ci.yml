@@ -2,7 +2,7 @@ name: CI Verification
 
 on:
   push:
-    branches: [ main, DATA_PREPARATION, phase3-profiling, feature/phase3-profiling, phase4-tokenization, feature/phase4-tokenization, phase5-deduplication, feature/phase5-deduplication, phase6-taxonomy, feature/phase6-taxonomy, phase7-splits, feature/phase7-splits ]
+    branches: [ main, DATA_PREPARATION, phase3-profiling, feature/phase3-profiling, phase4-tokenization, feature/phase4-tokenization, phase5-deduplication, feature/phase5-deduplication, phase6-taxonomy, feature/phase6-taxonomy, phase7-splits, feature/phase7-splits, contrastive-retrieval-engine, feature/contrastive-retrieval-engine ]
   pull_request:
     branches: [ main ]
 

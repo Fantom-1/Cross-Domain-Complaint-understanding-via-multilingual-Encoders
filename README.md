@@ -8,7 +8,7 @@ A reproducible benchmark for fine-grained consumer complaint classification and 
 
 This repository benchmarks multilingual pretrained encoders on real-world consumer complaints across diverse financial domains (mortgages, credit reporting, debt collection, payment systems, and bank accounts).
 
-The initial baseline phase evaluates **`facebook/xlm-v-base`** (1B parameter multilingual model with a 2.5M vocabulary) fine-tuned for 16-class intent classification on a frozen, stratified, and deduplicated corpus derived from the Consumer Financial Protection Bureau (CFPB) complaint database.
+The initial baseline phase evaluates **`facebook/xlm-v-base`** (1B parameter multilingual model with a 901,629-token vocabulary) fine-tuned for 16-class intent classification on a frozen, stratified, and deduplicated corpus derived from the Consumer Financial Protection Bureau (CFPB) complaint database.
 
 ---
 
