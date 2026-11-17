@@ -35,7 +35,7 @@ def split_sentences(text: str) -> list[str]:
     cleaned = re.sub(r"\s+", " ", str(text or "")).strip()
     if not cleaned:
         return []
-    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9I])", cleaned)
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
     return [p.strip() for p in parts if p.strip()]
 
 
@@ -74,13 +74,21 @@ def summarize_complaint(narrative: str) -> dict[str, Any]:
         if len(evidence) >= 6:
             break
 
+    summary_sentences = []
+    for sentence in sentences:
+        candidate = " ".join(summary_sentences + [sentence])
+        if summary_sentences and len(candidate) > 900:
+            break
+        summary_sentences.append(sentence)
+    short_summary = " ".join(summary_sentences)
+
     result = {
         "problem": problem,
         "customer_concern": concern,
         "timeline_and_events": events,
         "requested_resolution": requested,
         "supporting_evidence": evidence,
-        "short_summary": " ".join(sentences[:3])[:900],
+        "short_summary": short_summary,
         "limitations": [
             "Extractive baseline: selected sentences may omit context.",
             "No reference-summary or human factuality evaluation is included by this function.",
