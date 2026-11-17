@@ -25,7 +25,7 @@ class TripletDataset(Dataset):
         train = pd.read_csv(train_csv, keep_default_na=False)
         pairs = pd.read_csv(pairs_csv, keep_default_na=False)
         required_train = {"example_id", "text"}
-        required_pairs = {"anchor_id", "positive_id", "negative_id", "supervision"}
+        required_pairs = {"anchor_id", "positive_id", "negative_id", "weak_label", "negative_label", "supervision"}
         if required_train - set(train.columns):
             raise ValueError(f"Training data missing columns: {sorted(required_train - set(train.columns))}")
         if required_pairs - set(pairs.columns):
@@ -52,6 +52,8 @@ class TripletDataset(Dataset):
             self.text[str(row["anchor_id"])],
             self.text[str(row["positive_id"])],
             self.text[str(row["negative_id"])],
+            str(row["weak_label"]),
+            str(row["negative_label"]),
         )
 
 
@@ -94,6 +96,7 @@ def main() -> None:
     parser.add_argument("--max-steps", type=int, default=100, help="Pilot cap; set 0 for full epochs")
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--temperature", type=float, default=0.07)
+    parser.add_argument("--objective", choices=["supcon", "pairwise-infonce"], default="supcon")
     parser.add_argument("--projection-size", type=int, default=256)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--gradient-checkpointing", action="store_true")
@@ -130,12 +133,15 @@ def main() -> None:
     )
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
     history = []
+    label_values = sorted(set(pd.read_csv(args.pairs_csv, keep_default_na=False)["weak_label"].astype(str)) |
+                          set(pd.read_csv(args.pairs_csv, keep_default_na=False)["negative_label"].astype(str)))
+    label_to_id = {label: i for i, label in enumerate(label_values)}
     global_step = 0
     encoder.train()
     projection.train()
 
     for epoch in range(args.epochs):
-        for anchor, positive, negative in loader:
+        for anchor, positive, negative, anchor_labels, negative_labels in loader:
             texts = list(anchor) + list(positive) + list(negative)
             encoded = tokenizer(
                 texts, padding=True, truncation=True, max_length=args.max_length,
@@ -150,22 +156,58 @@ def main() -> None:
                     z = projection(pooled)
                     n = len(anchor)
                     za, zp, zn = z[:n], z[n:2*n], z[2*n:]
-                    logits = torch.stack([
-                        F.cosine_similarity(za, zp, dim=-1),
-                        F.cosine_similarity(za, zn, dim=-1),
-                    ], dim=1) / args.temperature
-                    loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
+                    if args.objective == "supcon":
+                        batch_labels = torch.tensor(
+                            [label_to_id[x] for x in anchor_labels]
+                            + [label_to_id[x] for x in anchor_labels]
+                            + [label_to_id[x] for x in negative_labels],
+                            dtype=torch.long, device=device,
+                        )
+                        similarity = (z @ z.T) / args.temperature
+                        self_mask = torch.eye(similarity.size(0), dtype=torch.bool, device=device)
+                        positive_mask = batch_labels.unsqueeze(0).eq(batch_labels.unsqueeze(1)) & ~self_mask
+                        logits_masked = similarity.masked_fill(self_mask, float("-inf"))
+                        log_prob = logits_masked - torch.logsumexp(logits_masked, dim=1, keepdim=True)
+                        positive_count = positive_mask.sum(dim=1)
+                        valid = positive_count > 0
+                        per_anchor = -(log_prob.masked_fill(~positive_mask, 0.0).sum(dim=1)
+                                       / positive_count.clamp(min=1))
+                        loss = per_anchor[valid].mean()
+                    else:
+                        logits = torch.stack([
+                            F.cosine_similarity(za, zp, dim=-1),
+                            F.cosine_similarity(za, zn, dim=-1),
+                        ], dim=1) / args.temperature
+                        loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
             else:
                 output_model = encoder(**encoded)
                 pooled = mean_pool(output_model.last_hidden_state, encoded["attention_mask"])
                 z = projection(pooled)
                 n = len(anchor)
                 za, zp, zn = z[:n], z[n:2*n], z[2*n:]
-                logits = torch.stack([
-                    F.cosine_similarity(za, zp, dim=-1),
-                    F.cosine_similarity(za, zn, dim=-1),
-                ], dim=1) / args.temperature
-                loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
+                if args.objective == "supcon":
+                    batch_labels = torch.tensor(
+                        [label_to_id[x] for x in anchor_labels]
+                        + [label_to_id[x] for x in anchor_labels]
+                        + [label_to_id[x] for x in negative_labels],
+                        dtype=torch.long, device=device,
+                    )
+                    similarity = (z @ z.T) / args.temperature
+                    self_mask = torch.eye(similarity.size(0), dtype=torch.bool, device=device)
+                    positive_mask = batch_labels.unsqueeze(0).eq(batch_labels.unsqueeze(1)) & ~self_mask
+                    logits_masked = similarity.masked_fill(self_mask, float("-inf"))
+                    log_prob = logits_masked - torch.logsumexp(logits_masked, dim=1, keepdim=True)
+                    positive_count = positive_mask.sum(dim=1)
+                    valid = positive_count > 0
+                    per_anchor = -(log_prob.masked_fill(~positive_mask, 0.0).sum(dim=1)
+                                   / positive_count.clamp(min=1))
+                    loss = per_anchor[valid].mean()
+                else:
+                    logits = torch.stack([
+                        F.cosine_similarity(za, zp, dim=-1),
+                        F.cosine_similarity(za, zn, dim=-1),
+                    ], dim=1) / args.temperature
+                    loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(
@@ -189,7 +231,7 @@ def main() -> None:
         "projection_size": args.projection_size,
         "hidden_size": hidden_size,
         "temperature": args.temperature,
-        "objective": "weakly_supervised_triplet_infonce",
+        "objective": "weakly_supervised_supervised_contrastive" if args.objective == "supcon" else "weakly_supervised_triplet_infonce",
         "supervision": "weak_label",
         "seed": args.seed,
         "steps": global_step,
