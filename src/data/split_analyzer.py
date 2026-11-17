@@ -285,7 +285,7 @@ class SplitAnalyzer:
         canonical_parquet_path: Optional[str] = None,
         validate_canonical: bool = False,
         require_cluster_manifest: bool = True,
-        require_full_coverage: bool = False,
+        require_full_coverage: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Audits the in-distribution baseline split with fail-closed cluster leakage verification.
         
@@ -361,7 +361,10 @@ class SplitAnalyzer:
         shared_groups = {gid: sps for gid, sps in groups_by_split.items() if len(sps) > 1}
         has_group_leakage = len(shared_groups) > 0
 
-        # Cluster manifest verification - FAIL CLOSED
+        # Cluster manifest verification - FAIL CLOSED. Requiring the manifest
+        # also requires complete coverage unless a test explicitly opts out.
+        if require_full_coverage is None:
+            require_full_coverage = require_cluster_manifest
         cl_path = clusters_csv_path or self.clusters_path
         if require_cluster_manifest and (not cl_path or not os.path.exists(cl_path)):
             raise FileNotFoundError(f"Cluster manifest required for fail-closed leakage verification but not found: {cl_path}")
@@ -393,7 +396,9 @@ class SplitAnalyzer:
             cluster_records_checked = len(cl_rows)
             for r in cl_rows:
                 eid = r["example_id"]
-                cid = r["cluster_id"]
+                cid = str(r.get("cluster_id", "")).strip()
+                if not cid:
+                    raise ValueError(f"Empty cluster_id for example_id: {eid}")
 
                 if eid not in split_by_example:
                     raise ValueError(f"Cluster manifest contains unknown example_id: {eid}")
