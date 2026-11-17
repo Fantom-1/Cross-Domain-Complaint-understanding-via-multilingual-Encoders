@@ -86,10 +86,11 @@ def generate_pairs(
         raise ValueError("Train IDs overlap non-training split IDs")
 
     cluster_ids = set(clusters["example_id"])
-    if cluster_ids != train_ids:
+    all_manifest_ids = set(split_manifest["example_id"])
+    if not train_ids.issubset(cluster_ids) or not cluster_ids.issubset(all_manifest_ids):
         raise ValueError(
-            f"Cluster manifest must cover exactly the training IDs "
-            f"(missing={len(train_ids - cluster_ids)}, extra={len(cluster_ids - train_ids)})"
+            f"Cluster manifest must cover every train ID and contain no unknown IDs "
+            f"(missing_train={len(train_ids - cluster_ids)}, unknown={len(cluster_ids - all_manifest_ids)})"
         )
     if clusters["cluster_id"].isna().any() or clusters["cluster_id"].astype(str).str.strip().eq("").any():
         raise ValueError("Cluster manifest contains empty cluster_id values")
@@ -97,6 +98,7 @@ def generate_pairs(
     train["example_id"] = train["example_id"].astype(str)
     clusters["example_id"] = clusters["example_id"].astype(str)
     clusters["cluster_id"] = clusters["cluster_id"].astype(str)
+    clusters = clusters.loc[clusters["example_id"].isin(train_ids)].copy()
     train = train.merge(clusters[["example_id", "cluster_id"]], on="example_id", how="left", validate="one_to_one")
     if train["cluster_id"].isna().any():
         raise ValueError("Incomplete duplicate-cluster mapping")
@@ -105,9 +107,39 @@ def generate_pairs(
     records = train.to_dict("records")
     by_label_domain: dict[tuple[str, str], list[dict]] = {}
     by_label: dict[str, list[dict]] = {}
+    by_domain: dict[str, list[dict]] = {}
     for row in records:
         by_label_domain.setdefault((str(row["label"]), str(row["domain"])), []).append(row)
         by_label.setdefault(str(row["label"]), []).append(row)
+        by_domain.setdefault(str(row["domain"]), []).append(row)
+
+    def pick_valid(rng: random.Random, candidates: list[dict], anchor: dict, *, positive: bool) -> dict | None:
+        if not candidates:
+            return None
+        anchor_id = str(anchor["example_id"])
+        anchor_cluster = str(anchor["cluster_id"])
+        anchor_group = str(anchor["group_id"])
+        anchor_label = str(anchor["label"])
+        for _ in range(min(80, max(1, len(candidates)))):
+            candidate = candidates[rng.randrange(len(candidates))]
+            if str(candidate["example_id"]) == anchor_id:
+                continue
+            if str(candidate["cluster_id"]) == anchor_cluster or str(candidate["group_id"]) == anchor_group:
+                continue
+            if positive and str(candidate["label"]) != anchor_label:
+                continue
+            if not positive and str(candidate["label"]) == anchor_label:
+                continue
+            return candidate
+        # Deterministic fallback handles small/duplicate-heavy candidate pools.
+        valid = [
+            candidate for candidate in candidates
+            if str(candidate["example_id"]) != anchor_id
+            and str(candidate["cluster_id"]) != anchor_cluster
+            and str(candidate["group_id"]) != anchor_group
+            and ((str(candidate["label"]) == anchor_label) if positive else (str(candidate["label"]) != anchor_label))
+        ]
+        return valid[rng.randrange(len(valid))] if valid else None
 
     rows: list[dict] = []
     skipped_no_positive = 0
@@ -124,40 +156,34 @@ def generate_pairs(
 
         same_label = by_label[str(anchor["label"])]
         if mode == "same-domain":
-            positives = by_label_domain.get((str(anchor["label"]), str(anchor["domain"])), [])
+            positive_pool = by_label_domain.get((str(anchor["label"]), str(anchor["domain"])), [])
         else:
-            positives = [r for r in same_label if str(r["domain"]) != str(anchor["domain"])]
+            positive_pool = [
+                r for r in same_label if str(r["domain"]) != str(anchor["domain"])
+            ]
 
-        positives = [
-            r for r in positives
-            if str(r["example_id"]) != anchor_id
-            and str(r["cluster_id"]) != str(anchor["cluster_id"])
-            and str(r["group_id"]) != str(anchor["group_id"])
-        ]
-        if not positives:
+        rng = _stable_rng(seed, anchor_id, mode)
+        positive = pick_valid(rng, positive_pool, anchor, positive=True)
+        if positive is None:
             skipped_no_positive += 1
             continue
 
-        negatives = [
-            r for r in records
-            if str(r["label"]) != str(anchor["label"])
-            and str(r["cluster_id"]) != str(anchor["cluster_id"])
-            and str(r["group_id"]) != str(anchor["group_id"])
-        ]
-        # Prefer a different weak label from the same domain to avoid making
-        # product-domain recognition the easiest negative signal.
-        same_domain_negatives = [r for r in negatives if str(r["domain"]) == str(anchor["domain"])]
-        if same_domain_negatives:
-            negatives = same_domain_negatives
-        if not negatives:
+        # Prefer same-domain negatives; fall back to the full train pool only
+        # when the domain has no valid alternative weak label.
+        negative = pick_valid(rng, by_domain.get(str(anchor["domain"]), []), anchor, positive=False)
+        if negative is None:
+            negative = pick_valid(rng, records, anchor, positive=False)
+        if negative is None:
             skipped_no_negative += 1
             continue
 
-        rng = _stable_rng(seed, anchor_id, mode)
-        pair_count = min(max_pairs_per_anchor, len(positives))
+        pair_count = max_pairs_per_anchor
         for pair_no in range(pair_count):
-            positive = positives[rng.randrange(len(positives))]
-            negative = negatives[rng.randrange(len(negatives))]
+            if pair_no:
+                positive = pick_valid(rng, positive_pool, anchor, positive=True) or positive
+                negative = pick_valid(rng, by_domain.get(str(anchor["domain"]), []), anchor, positive=False)
+                if negative is None:
+                    negative = pick_valid(rng, records, anchor, positive=False) or negative
             rows.append({
                 "pair_id": hashlib.sha256(
                     f"{seed}|{anchor_id}|{positive['example_id']}|{negative['example_id']}|{mode}|{pair_no}".encode()
