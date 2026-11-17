@@ -1,0 +1,10 @@
+domain,account_access,account_management,application_problem,closing_process,credit_terms_dispute,debt_communication,debt_not_owed,debt_threats,fraud_or_scam,funds_availability,payment_problem,reporting_improper_use,reporting_incorrect_information,reporting_investigation_dispute,servicing_dispute,transaction_problem,total_records,domain_share_pct,active_classes_count,zero_classes_count
+bank_account,1833,2032,0,0,0,0,0,0,2,1683,289,13,14,8,0,0,5874,12.85,8,8
+credit_card,1167,0,409,0,1843,0,0,0,164,0,290,73,97,189,55,1958,6245,13.66,10,6
+credit_reporting,0,0,0,0,7,0,0,0,122,0,0,1624,2335,2225,2,4,6319,13.82,7,9
+debt_collection,0,0,0,0,0,3000,3000,3000,714,0,0,0,0,0,0,0,9714,21.25,4,12
+money_transfer,0,0,0,0,225,0,0,0,1994,1267,0,0,0,0,60,1038,4584,10.03,5,11
+mortgage,0,0,1447,1661,0,0,0,0,1,0,1761,52,92,65,0,0,5079,11.11,7,9
+payday_personal_loan,0,0,323,0,925,0,0,0,0,50,344,89,92,58,168,0,2049,4.48,8,8
+student_loan,0,0,133,0,0,0,0,0,2,0,0,59,148,176,2219,0,2737,5.99,6,10
+vehicle_loan,0,968,688,0,0,0,0,0,1,0,316,152,222,279,496,0,3122,6.83,8,8

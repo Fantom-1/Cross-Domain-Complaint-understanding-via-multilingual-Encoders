@@ -1,0 +1,17 @@
+intent_label,count_2018,count_2019,count_2020,count_2021,total_records
+account_access,472,756,1248,524,3000
+account_management,611,860,1090,439,3000
+application_problem,552,806,1127,515,3000
+closing_process,252,427,674,308,1661
+credit_terms_dispute,635,969,1036,360,3000
+debt_communication,716,930,960,394,3000
+debt_not_owed,608,889,1031,472,3000
+debt_threats,645,967,966,422,3000
+fraud_or_scam,434,891,1112,563,3000
+funds_availability,469,743,1013,775,3000
+payment_problem,614,970,1011,405,3000
+reporting_improper_use,423,673,701,265,2062
+reporting_incorrect_information,473,791,1304,432,3000
+reporting_investigation_dispute,466,708,1276,550,3000
+servicing_dispute,873,1123,736,268,3000
+transaction_problem,461,751,1247,541,3000
