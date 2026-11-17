@@ -1003,3 +1003,340 @@ The contrastive retrieval contribution is accepted only when:
 - The report states whether H1/H2/H3 were supported, not supported or inconclusive.
 
 Until these criteria are met, describe the work as an implemented experiment or pilot, not as a demonstrated improvement.
+
+
+---
+
+# Shared cluster training, artifact handling and audit protocol
+
+**Priority: mandatory.** The research cluster is shared. Every agent action must be non-interfering, quota-aware, attributable, reproducible and reversible. These instructions apply to data preparation, training, validation, evaluation, indexing and demo inference.
+
+## 1. Credential and access security
+
+- Never place passwords, private keys, tokens, SSH config containing secrets, or credential-bearing command lines in this repository, Markdown handovers, logs, notebooks, screenshots, issue comments or experiment manifests.
+- A password was inadvertently included in a chat message. Treat it as compromised: the account owner must change/rotate it immediately through the approved process. Do not reuse it or copy it into agent instructions. If password authentication is allowed, use the institution's approved secret-entry mechanism; never pass the password as a command-line argument or environment variable.
+- Prefer an owner-provisioned SSH key with a passphrase and restrictive permissions, subject to cluster policy. Do not generate, upload, install or authorize a key without the account owner's explicit approval.
+- The coding agent must not attempt to log in until the owner has separately supplied access through an approved secure channel and confirmed authorization. This document deliberately contains no host, username or password.
+- Never use sshpass, plaintext credential files, shell history entries containing secrets, or automated password prompts recorded by terminal logs.
+- Do not print environment variables wholesale, inspect unrelated users' processes/files, or copy credentials into GitHub Actions.
+- If a secret is found in tracked files or logs: stop, restrict access, notify the owner, rotate/revoke it, remove it from the current working tree and arrange history remediation. A new commit deleting the text does not erase it from Git history.
+
+## 2. Hard safety boundaries
+
+The agent may perform read-only inspection first. It must stop and request owner approval before:
+- creating persistent directories on cluster storage;
+- copying datasets, checkpoints, indexes or containers to the cluster;
+- installing packages or creating environments on shared storage;
+- submitting any Slurm job, including smoke tests;
+- starting a persistent process or network service;
+- creating Kubernetes resources or opening a port/tunnel;
+- changing permissions, quotas, retention or storage policy;
+- deleting, overwriting, moving or cleaning any existing artifact.
+
+Never:
+- use sudo or privileged containers;
+- modify system Python, global packages, drivers, CUDA, modules, Slurm or Kubernetes configuration;
+- use another user's directories, caches, processes, allocations or credentials;
+- run training on a login node;
+- use broad cleanup commands or wildcard deletion, recursive chmod/chown;
+- kill processes by broad name/pattern;
+- consume all available CPUs, memory, GPUs, disk or shared filesystem bandwidth;
+- run multiple training jobs concurrently unless the owner and scheduler allocation explicitly permit it;
+- assume that an installed Docker/Kubernetes command means permission to use the service.
+
+No action may interfere with other people's workloads. If resource ownership or a path is ambiguous, stop.
+
+## 3. Preflight: read-only inspection
+
+Run only after approved account access, and save output in an owner-approved local/private project record with secrets redacted. Do not dump sensitive environment variables.
+
+Suggested checks:
+- whoami, hostname, pwd
+- module avail and module list
+- sinfo -o "%P %a %l %D %G"
+- squeue -u "$USER"
+- nvidia-smi -L and nvidia-smi only where permitted
+- df -h for approved mount points
+- quota -s if available and permitted
+- inspect repository git status, branch and commit
+- confirm approved project storage, project quota, retention policy and scratch policy with the administrator
+
+Do not inspect other users' home directories or process command lines. Do not infer a writable path from df; obtain the approved path from the administrator/owner.
+
+Record:
+- inspection timestamp and timezone;
+- account identity (no credentials);
+- repository URL, branch and commit;
+- approved partition/QOS and resource limits;
+- approved storage mount and quota;
+- module/environment versions;
+- GPU/MIG visibility from within an authorized allocation;
+- outstanding permission or quota questions.
+
+## 4. Environment isolation and loading
+
+Use only an environment owned by this project in an approved project location, or an administrator-provided immutable container/environment. Do not alter shared base environments.
+
+Before creating an environment:
+1. Confirm the permitted location and quota.
+2. Inspect repository dependency files and lock files.
+3. Confirm the Python/CUDA/PyTorch compatibility matrix with the project tests and cluster-supported modules.
+4. Ask before downloading large model weights or package caches.
+5. Pin dependencies and record exact versions.
+
+A possible module-loading pattern, only if the administrator confirms these exact modules are approved for the account:
+
+    module load anaconda3-2025
+    module load cuda-12.8
+
+Do not blindly execute this if module names differ. Do not install another CUDA toolkit or PyTorch build over a working shared installation.
+
+Set project-specific cache/temp locations only after their directories have been approved and created:
+- HF_HOME
+- TRANSFORMERS_CACHE if required by the pinned Transformers version
+- TORCH_HOME
+- XDG_CACHE_HOME
+- TMPDIR
+
+Never point caches at another user's home or a shared global cache for writes. Do not set these variables to guessed paths. Do not print tokens or secrets when inspecting environment configuration.
+
+Before any GPU work, verify from inside the approved allocation:
+- Python version;
+- Python package versions for torch, transformers, tokenizers, accelerate and relevant project dependencies;
+- torch.cuda.is_available();
+- visible device count and device name;
+- CUDA runtime reported by PyTorch;
+- a small allocation/forward/backward smoke test using a synthetic batch.
+
+Do not assume host nvidia-smi visibility means the scheduled job has GPU access. The job's visible devices and Slurm allocation are authoritative.
+
+## 5. Storage layout, quotas and artifact lifecycle
+
+Use only administrator-approved project-owned paths. Keep source checkout, immutable source data, run outputs, checkpoints, retrieval index, logs and temporary cache logically separate.
+
+Required safeguards:
+- record free space and quota before and after each stage;
+- estimate checkpoint, optimizer-state, cache and log growth before launching;
+- keep raw data read-only;
+- never edit the frozen dataset or split manifests in place;
+- use unique run directories; never reuse a completed run directory;
+- write outputs to a temporary file in the same project-owned filesystem, verify it, then atomically rename into its final run path;
+- preserve the last known-good checkpoint until the new checkpoint passes load/evaluation checks;
+- use explicit retention limits approved by the owner;
+- do not delete intermediate artifacts automatically;
+- do not write large embeddings/checkpoints to Git or the repository checkout;
+- do not put temporary files in /tmp unless policy and capacity are confirmed.
+
+Before a run, record estimated disk requirements. If quota/free space is insufficient or unknown, do not launch.
+
+## 6. Dataset and leakage controls
+
+- Treat the frozen dataset, split manifest and duplicate-cluster catalog as immutable inputs.
+- Verify expected file hashes and row counts before training.
+- Run Phase 7 split feasibility and duplicate/leakage audits from a clean checkout.
+- Verify no duplicate cluster, complaint ID, narrative hash or source group crosses partitions according to the committed protocol.
+- Fit preprocessing, vocabulary/statistical transforms and pair samplers on training data only.
+- Build contrastive training pairs from train only. Validation/test examples must never enter training pairs, queues, hard-negative mining, normalization fitting or training gallery.
+- Validation queries retrieve against the training gallery. Final test queries retrieve against the training gallery after the model/config is frozen.
+- Keep human semantic evaluation items held out from model development unless an explicit annotation/training protocol permits otherwise.
+- CFPB labels are weak administrative labels. Report weak-label proxy metrics separately from human-adjudicated semantic relevance.
+- Do not claim multilingual complaint performance from this English-only corpus.
+
+If any leakage check fails or cannot be reproduced, stop training and report the exact failing artifact and evidence.
+
+## 7. Controlled training sequence
+
+Do not launch the complete experiment matrix at once. Execute one gated stage at a time.
+
+### Gate A — clean checkout and software tests
+- Fetch the intended branch and record exact commit SHA.
+- Confirm clean working tree and no secrets.
+- Run formatting, lint, type checks and unit tests supported by the repository.
+- Run data schema, split, duplicate and Phase 7 audits.
+- Save complete test output and exit codes.
+- Resolve failures before GPU allocation.
+
+### Gate B — CPU data and pair-manifest validation
+- Generate deterministic pair manifests from training data only.
+- Exclude duplicate-cluster and shared-source pairs.
+- Record anchor/positive/negative IDs, labels, domains, sampling mode, supervision source, seed, dataset hash and split.
+- Check counts, nulls, invalid IDs, class/domain support and false-negative risk.
+- Review a privacy-approved sample of pair metadata; do not export complaint text unnecessarily.
+- Verify every referenced record belongs to train.
+
+### Gate C — approved GPU smoke test
+Only after explicit owner approval and scheduler allocation:
+- request one conservative approved MIG slice, initially 1g.24gb if confirmed available;
+- request only the minimum permitted CPU and RAM;
+- use a synthetic batch first;
+- verify model/tokenizer loading, forward pass, loss, backward pass, optimizer step, checkpoint save, checkpoint reload and deterministic inference;
+- measure peak allocated/reserved VRAM, host RAM, step time and throughput;
+- terminate the job normally and verify it no longer runs.
+
+No full dataset epoch during the smoke test.
+
+### Gate D — baseline and pilot training
+Run sequentially, not concurrently:
+1. TF-IDF retrieval baseline (CPU).
+2. Frozen XLM-V embedding baseline.
+3. SimCSE pilot.
+4. Same-domain supervised contrastive pilot.
+5. Cross-domain supervised contrastive pilot only if class/domain support and pair audits pass.
+6. Pairwise InfoNCE/triplet only if it adds a distinct, justified comparison.
+7. Classifier evaluation independently.
+
+Use a small, deterministic pilot before full training. Do not launch a full run until the pilot's loss, gradients, memory, throughput, validation path and checkpoint reload are verified.
+
+### Gate E — full training
+For each run:
+- use one scheduler allocation at a time unless additional parallelism is explicitly approved;
+- record run ID, git commit, config hash, data/split/pair manifest hashes, model/tokenizer revision, seed, job ID and resource request;
+- record start/end times, exit code, stdout/stderr paths, loss history, validation metrics, GPU/CPU/RAM/disk usage and checkpoint hashes;
+- checkpoint at documented intervals and preserve a last-known-good checkpoint;
+- use early stopping/model selection on validation only;
+- never evaluate the test set repeatedly to select hyperparameters;
+- if a job is preempted or fails, record the failure and resume only from a verified compatible checkpoint;
+- do not silently change config mid-run.
+
+### Gate F — evaluation and final test
+- Compare TF-IDF, frozen XLM-V, classifier representations and contrastive variants with identical query/gallery definitions.
+- Report in-domain and feasible cross-domain results separately.
+- Report Precision@K, Recall@K, MRR@10, nDCG@K where relevant, query coverage, per-domain/class support and excluded cells.
+- Keep weak-label proxy and human semantic metrics separate.
+- Use validation for selection. Run final test evaluation once after locking the model/configuration.
+- Save predictions/metrics and manifests with hashes; restrict access to raw complaint text.
+- Include error analysis and confidence intervals where feasible.
+- Do not promote a model based only on lower training loss or higher weak-label consistency.
+
+## 8. Slurm job submission controls
+
+The agent must inspect the site's Slurm policy and use the approved partition, QOS, account, time limit, memory and GPU resource syntax. Do not guess scheduler flags or request resources beyond authorization.
+
+Before submission, present the exact proposed job script and resource request to the owner for approval. Use a unique job name and run ID. The job script must:
+- fail fast with strict shell error handling;
+- print job ID, host, timestamp, commit and non-secret environment versions;
+- use only the approved project working/output directories;
+- never echo credentials or all environment variables;
+- set conservative CPU thread limits where appropriate;
+- write logs to the run-specific directory;
+- record the exit status;
+- avoid automatic deletion or broad cleanup;
+- terminate only its own child processes on normal scheduler termination.
+
+After submission, record job ID, requested resources, actual allocation, exit state and log locations. Cancel only the exact job ID owned by this project and only after owner authorization or an established approved cancellation policy.
+
+## 9. Testing requirements
+
+Every stage must include:
+- unit tests for changed code;
+- integration tests for data/model/API boundaries;
+- regression tests for discovered bugs;
+- reproducibility check from a clean checkout;
+- checkpoint save/reload test;
+- resource and failure-path tests where applicable.
+
+Specific ML checks:
+- loss is finite;
+- gradients are finite and non-zero where expected;
+- optimizer updates parameters;
+- train/validation/test boundaries are enforced;
+- pair sampler is deterministic for a fixed seed;
+- duplicate/source exclusions work;
+- embedding dimensions, normalization and similarity are consistent;
+- index IDs map to the correct metadata;
+- no test data enters training or gallery;
+- validation/test predictions are generated from the intended checkpoint.
+
+Specific app checks:
+- startup fails clearly if artifacts are missing or mismatched;
+- readiness does not report healthy before all required models/indexes load;
+- input size and request rate are bounded;
+- errors do not expose stack traces, paths, secrets or complaint contents;
+- no raw input text is logged;
+- service can stop and restart without retraining;
+- API tests use synthetic or approved redacted fixtures.
+
+## 10. Logging, provenance and audit trail
+
+Every run must have a unique immutable run directory, for example:
+
+    runs/<run_id>/
+      run_manifest.json
+      config.yaml
+      environment.txt
+      git.txt
+      data_audit.json
+      pair_audit.json
+      train.log
+      validation_metrics.json
+      test_metrics.json
+      resource_usage.json
+      checkpoint_manifest.json
+      checksums.sha256
+      tests.log
+      status.json
+
+The exact location must be approved. This is a schema, not permission to create a path.
+
+run_manifest.json must record:
+- run ID and purpose;
+- UTC start/end times;
+- repository, branch and exact commit SHA;
+- dirty/clean working-tree status;
+- Python and dependency versions;
+- CUDA/PyTorch/Transformers versions;
+- model and tokenizer IDs/revisions;
+- dataset, split and pair-manifest hashes;
+- config hash and random seeds;
+- Slurm job ID, partition/QOS and allocated resources;
+- command used to launch;
+- output artifact paths and checksums;
+- metrics and test status;
+- exit code and failure reason, if any.
+
+Logs must not contain passwords, tokens, private keys, raw complaint narratives, unnecessary personal data or unrestricted environment dumps. Use structured, timestamped logs. Record metrics and identifiers rather than complaint content. Keep access permissions restrictive and retention consistent with institutional policy.
+
+## 11. Git and commit discipline
+
+- Work only in the designated project repository and approved feature branch.
+- Never commit credentials, raw complaint data, private metadata, checkpoints, vector indexes, caches, logs containing sensitive content or generated datasets.
+- Maintain .gitignore and scan staged changes for secrets and large files before every commit.
+- Commit source, tests, configs, documentation, schemas and small reproducibility manifests.
+- Record the commit SHA in every experiment manifest.
+- Use small, reviewable commits with descriptive messages.
+- Do not force-push, rewrite shared branch history, delete branches or merge PRs without owner approval.
+- Do not report a commit/merge unless GitHub confirms its exact SHA.
+- Every PR must include changed files, rationale, tests run, data impact, resource impact, privacy impact and rollback instructions.
+
+## 12. Stop conditions and incident response
+
+Immediately stop the current project job and notify the owner if:
+- the allocation differs from what was approved;
+- unexpected GPU/CPU/RAM/disk usage appears;
+- quota or filesystem pressure is observed;
+- a process appears to affect another user's workload;
+- any path is outside approved project storage;
+- secrets or raw complaint text appear in logs, commits or public outputs;
+- split leakage or data corruption is detected;
+- the job hangs, repeatedly restarts or exceeds its approved wall time;
+- an unexpected permission or ownership change is encountered.
+
+Stop only the project's own job/process by its exact scheduler job ID or PID. Never kill an unknown process. Preserve relevant non-sensitive logs, record the incident and do not retry until the cause is understood and the owner approves.
+
+## 13. Stage report and approval gates
+
+After each gate, return:
+1. PASS / PARTIAL / BLOCKED.
+2. Exact commit SHA and changed files.
+3. Commands executed and exit codes.
+4. Tests/audits and their outputs.
+5. Job IDs and resource usage, if a job was approved.
+6. Data/split/pair-manifest hashes.
+7. Artifact paths and checksums.
+8. Failures, risks and corrective action.
+9. Storage usage before/after.
+10. Explicit next action requiring approval.
+
+The agent must not advance to full training, test-set evaluation, persistent serving or Kubernetes deployment without owner review at the corresponding gate.
+
+**Default rule: inspect first, propose exact action, wait for approval, execute narrowly, verify, record, then stop.**
