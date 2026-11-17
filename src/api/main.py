@@ -5,9 +5,11 @@ Run locally only by default. Configure model/index paths with environment variab
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from src.api.engine import ComplaintEngine
@@ -15,6 +17,14 @@ from src.summarization.structured_summarizer import summarize_complaint
 
 
 app = FastAPI(title="Complaint Intelligence API", version="0.1.0")
+INDEX_HTML = Path(__file__).resolve().parent / "index.html"
+
+
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    if INDEX_HTML.is_file():
+        return INDEX_HTML.read_text(encoding="utf-8")
+    return "<h1>Complaint Intelligence API</h1><p>Visit <a href='/docs'>/docs</a> for Swagger UI.</p>"
 
 
 class ComplaintRequest(BaseModel):
