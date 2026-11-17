@@ -78,3 +78,11 @@ jobs:
       - name: Run Phase 7 Audit
         run: |
           python scripts/audit_phase7.py
+
+      - name: Run Phase 7 Default Cluster Coverage Regression
+        run: |
+          python -m unittest tests/data/test_phase7_default_cluster_coverage.py
+
+      - name: Run Contrastive Pair Sampler Tests
+        run: |
+          python -m unittest tests/contrastive/test_pair_sampler.py
