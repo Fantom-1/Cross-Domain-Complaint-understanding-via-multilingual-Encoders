@@ -93,7 +93,11 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=128)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--max-steps", type=int, default=100, help="Pilot cap; set 0 for full epochs")
+    parser.add_argument("--max-steps", type=int, default=0, help="0 for full epochs")
+    parser.add_argument("--eval-steps", type=int, default=250, help="Evaluate validation loss every N steps")
+    parser.add_argument("--early-stopping-patience", type=int, default=4, help="Patience evaluations before early stopping (0 to disable)")
+    parser.add_argument("--early-stopping-min-delta", type=float, default=0.001, help="Minimum delta to consider an improvement")
+    parser.add_argument("--val-ratio", type=float, default=0.05, help="Ratio of pairs held out for validation early stopping")
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--temperature", type=float, default=0.07)
     parser.add_argument("--objective", choices=["supcon", "pairwise-infonce"], default="supcon")
@@ -131,12 +135,31 @@ def main() -> None:
         lr=args.learning_rate,
         weight_decay=0.01,
     )
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+    if args.val_ratio > 0:
+        val_size = max(1, int(len(dataset) * args.val_ratio))
+        rng = random.Random(args.seed)
+        shuffled = list(range(len(dataset)))
+        rng.shuffle(shuffled)
+        val_indices = shuffled[:val_size]
+        train_indices = shuffled[val_size:]
+        train_dataset = torch.utils.data.Subset(dataset, train_indices)
+        val_dataset = torch.utils.data.Subset(dataset, val_indices)
+        loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        val_loader = DataLoader(val_dataset, batch_size=min(64, args.batch_size * 2), shuffle=False, num_workers=0)
+    else:
+        loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+        val_loader = None
+
     history = []
     label_values = sorted(set(pd.read_csv(args.pairs_csv, keep_default_na=False)["weak_label"].astype(str)) |
                           set(pd.read_csv(args.pairs_csv, keep_default_na=False)["negative_label"].astype(str)))
     label_to_id = {label: i for i, label in enumerate(label_values)}
     global_step = 0
+    best_val_loss = float("inf")
+    patience_counter = 0
+    best_encoder_state = None
+    best_proj_state = None
+    early_stopped = False
     encoder.train()
     projection.train()
 
@@ -215,11 +238,49 @@ def main() -> None:
             )
             optimizer.step()
             global_step += 1
-            history.append({"step": global_step, "epoch": epoch + 1, "loss": float(loss.detach().cpu())})
+            loss_val = float(loss.detach().cpu())
+            record = {"step": global_step, "epoch": epoch + 1, "loss": loss_val}
+
+            if global_step % 25 == 0 and (not args.eval_steps or global_step % args.eval_steps != 0):
+                print(f"[Step {global_step:5d}] Epoch {epoch+1} | Train Loss: {loss_val:.4f}", flush=True)
+
+            # Periodic Evaluation and Early Stopping Check
+            if args.eval_steps and global_step % args.eval_steps == 0:
+                if val_loader is not None:
+                    current_metric = _evaluate_triplet_val(
+                        encoder, projection, tokenizer, val_loader, device,
+                        use_bf16, args.max_length, args.temperature, args.objective, label_to_id
+                    )
+                    record["val_loss"] = current_metric
+                else:
+                    current_metric = float(np.mean([h["loss"] for h in history[-args.eval_steps:]])) if history else loss_val
+                    record["eval_train_loss"] = current_metric
+
+                if current_metric < best_val_loss - args.early_stopping_min_delta:
+                    best_val_loss = current_metric
+                    patience_counter = 0
+                    best_encoder_state = {k: v.cpu().clone() for k, v in encoder.state_dict().items()}
+                    best_proj_state = {k: v.cpu().clone() for k, v in projection.state_dict().items()}
+                    print(f"[Step {global_step:5d}] Train Loss: {loss_val:.4f} | Eval Loss: {current_metric:.4f} (NEW BEST) | Patience: 0/{args.early_stopping_patience}", flush=True)
+                else:
+                    patience_counter += 1
+                    print(f"[Step {global_step:5d}] Train Loss: {loss_val:.4f} | Eval Loss: {current_metric:.4f} (Best: {best_val_loss:.4f}) | Patience: {patience_counter}/{args.early_stopping_patience}", flush=True)
+                    if args.early_stopping_patience > 0 and patience_counter >= args.early_stopping_patience:
+                        print(f"=== Early stopping triggered at step {global_step} (Patience {args.early_stopping_patience} reached. Restoring best model at loss {best_val_loss:.4f}) ===", flush=True)
+                        early_stopped = True
+                        history.append(record)
+                        break
+
+            history.append(record)
             if args.max_steps and global_step >= args.max_steps:
                 break
-        if args.max_steps and global_step >= args.max_steps:
+        if early_stopped or (args.max_steps and global_step >= args.max_steps):
             break
+
+    if best_encoder_state is not None:
+        print(f"Restoring best checkpoint with loss {best_val_loss:.4f}")
+        encoder.load_state_dict(best_encoder_state)
+        projection.load_state_dict(best_proj_state)
 
     encoder.save_pretrained(output / "encoder")
     tokenizer.save_pretrained(output / "encoder")
@@ -242,6 +303,83 @@ def main() -> None:
     (output / "contrastive_config.json").write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     (output / "training_history.json").write_text(json.dumps(history, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"output_dir": str(output), "steps": global_step, "final_loss": history[-1]["loss"] if history else None, "device": str(device), "bf16": use_bf16}, indent=2))
+
+
+def _evaluate_triplet_val(encoder, projection, tokenizer, val_loader, device, use_bf16, max_length, temperature, objective, label_to_id):
+    encoder.eval()
+    projection.eval()
+    losses = []
+    with torch.no_grad():
+        for anchor, positive, negative, anchor_labels, negative_labels in val_loader:
+            texts = list(anchor) + list(positive) + list(negative)
+            encoded = tokenizer(
+                texts, padding=True, truncation=True, max_length=max_length,
+                return_tensors="pt",
+            )
+            encoded = {k: v.to(device) for k, v in encoded.items()}
+            if use_bf16:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    output_model = encoder(**encoded)
+                    pooled = mean_pool(output_model.last_hidden_state, encoded["attention_mask"])
+                    z = projection(pooled)
+                    n = len(anchor)
+                    za, zp, zn = z[:n], z[n:2*n], z[2*n:]
+                    if objective == "supcon":
+                        batch_labels = torch.tensor(
+                            [label_to_id[x] for x in anchor_labels]
+                            + [label_to_id[x] for x in anchor_labels]
+                            + [label_to_id[x] for x in negative_labels],
+                            dtype=torch.long, device=device,
+                        )
+                        similarity = (z @ z.T) / temperature
+                        self_mask = torch.eye(similarity.size(0), dtype=torch.bool, device=device)
+                        positive_mask = batch_labels.unsqueeze(0).eq(batch_labels.unsqueeze(1)) & ~self_mask
+                        logits_masked = similarity.masked_fill(self_mask, float("-inf"))
+                        log_prob = logits_masked - torch.logsumexp(logits_masked, dim=1, keepdim=True)
+                        positive_count = positive_mask.sum(dim=1)
+                        valid = positive_count > 0
+                        per_anchor = -(log_prob.masked_fill(~positive_mask, 0.0).sum(dim=1)
+                                       / positive_count.clamp(min=1))
+                        batch_loss = per_anchor[valid].mean()
+                    else:
+                        logits = torch.stack([
+                            F.cosine_similarity(za, zp, dim=-1),
+                            F.cosine_similarity(za, zn, dim=-1),
+                        ], dim=1) / temperature
+                        batch_loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
+            else:
+                output_model = encoder(**encoded)
+                pooled = mean_pool(output_model.last_hidden_state, encoded["attention_mask"])
+                z = projection(pooled)
+                n = len(anchor)
+                za, zp, zn = z[:n], z[n:2*n], z[2*n:]
+                if objective == "supcon":
+                    batch_labels = torch.tensor(
+                        [label_to_id[x] for x in anchor_labels]
+                        + [label_to_id[x] for x in anchor_labels]
+                        + [label_to_id[x] for x in negative_labels],
+                        dtype=torch.long, device=device,
+                    )
+                    similarity = (z @ z.T) / temperature
+                    self_mask = torch.eye(similarity.size(0), dtype=torch.bool, device=device)
+                    positive_mask = batch_labels.unsqueeze(0).eq(batch_labels.unsqueeze(1)) & ~self_mask
+                    logits_masked = similarity.masked_fill(self_mask, float("-inf"))
+                    log_prob = logits_masked - torch.logsumexp(logits_masked, dim=1, keepdim=True)
+                    positive_count = positive_mask.sum(dim=1)
+                    valid = positive_count > 0
+                    per_anchor = -(log_prob.masked_fill(~positive_mask, 0.0).sum(dim=1)
+                                   / positive_count.clamp(min=1))
+                    batch_loss = per_anchor[valid].mean()
+                else:
+                    logits = torch.stack([
+                        F.cosine_similarity(za, zp, dim=-1),
+                        F.cosine_similarity(za, zn, dim=-1),
+                    ], dim=1) / temperature
+                    batch_loss = F.cross_entropy(logits, torch.zeros(n, dtype=torch.long, device=device))
+            losses.append(float(batch_loss.detach().cpu()))
+    encoder.train()
+    projection.train()
+    return float(np.mean(losses)) if losses else float("inf")
 
 
 if __name__ == "__main__":

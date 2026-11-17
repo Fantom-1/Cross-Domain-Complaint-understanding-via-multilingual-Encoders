@@ -17,7 +17,7 @@ from src.summarization.structured_summarizer import summarize_complaint
 
 
 class ComplaintEngine:
-    def __init__(self, classifier_dir: str, label_map_path: str,
+    def __init__(self, classifier_dir: str | None, label_map_path: str,
                  contrastive_dir: str, retrieval_index_dir: str,
                  max_length: int = 256):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,9 +28,13 @@ class ComplaintEngine:
             raise ValueError("Label map must be a non-empty label-to-ID mapping")
         self.id_to_label = {int(value): str(key) for key, value in self.label_map.items()}
 
-        self.classifier_tokenizer = AutoTokenizer.from_pretrained(classifier_dir)
-        self.classifier = AutoModelForSequenceClassification.from_pretrained(classifier_dir)
-        self.classifier.to(self.device).eval()
+        if classifier_dir and Path(classifier_dir).is_dir():
+            self.classifier_tokenizer = AutoTokenizer.from_pretrained(classifier_dir)
+            self.classifier = AutoModelForSequenceClassification.from_pretrained(classifier_dir)
+            self.classifier.to(self.device).eval()
+        else:
+            self.classifier_tokenizer = None
+            self.classifier = None
 
         self.contrastive_dir = Path(contrastive_dir).resolve()
         self.contrastive_config = json.loads(
@@ -63,8 +67,8 @@ class ComplaintEngine:
 
     @classmethod
     def from_env(cls) -> "ComplaintEngine":
+        classifier_dir = os.getenv("COMPLAINT_CLASSIFIER_DIR")
         required = {
-            "COMPLAINT_CLASSIFIER_DIR": os.getenv("COMPLAINT_CLASSIFIER_DIR"),
             "COMPLAINT_LABEL_MAP": os.getenv("COMPLAINT_LABEL_MAP"),
             "COMPLAINT_CONTRASTIVE_DIR": os.getenv("COMPLAINT_CONTRASTIVE_DIR"),
             "COMPLAINT_RETRIEVAL_INDEX_DIR": os.getenv("COMPLAINT_RETRIEVAL_INDEX_DIR"),
@@ -73,27 +77,39 @@ class ComplaintEngine:
         if missing:
             raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
         return cls(
-            required["COMPLAINT_CLASSIFIER_DIR"],
+            classifier_dir,
             required["COMPLAINT_LABEL_MAP"],
             required["COMPLAINT_CONTRASTIVE_DIR"],
             required["COMPLAINT_RETRIEVAL_INDEX_DIR"],
         )
 
     def predict_intent(self, text: str, top_n: int = 3) -> dict[str, Any]:
-        tokens = self.classifier_tokenizer(
-            text, truncation=True, max_length=self.max_length, return_tensors="pt"
-        )
-        tokens = {k: v.to(self.device) for k, v in tokens.items()}
-        with torch.inference_mode():
-            logits = self.classifier(**tokens).logits[0]
-            probs = torch.softmax(logits.float(), dim=-1)
-            values, indices = torch.topk(probs, k=min(top_n, probs.numel()))
-        predictions = [
-            {"intent": self.id_to_label.get(int(idx), f"unknown_{int(idx)}"), "confidence": float(value)}
-            for value, idx in zip(values.cpu(), indices.cpu())
-        ]
-        return {"predicted_intent": predictions[0]["intent"], "confidence": predictions[0]["confidence"],
-                "alternatives": predictions}
+        if self.classifier is not None:
+            tokens = self.classifier_tokenizer(
+                text, truncation=True, max_length=self.max_length, return_tensors="pt"
+            )
+            tokens = {k: v.to(self.device) for k, v in tokens.items()}
+            with torch.inference_mode():
+                logits = self.classifier(**tokens).logits[0]
+                probs = torch.softmax(logits.float(), dim=-1)
+                values, indices = torch.topk(probs, k=min(top_n, probs.numel()))
+            predictions = [
+                {"intent": self.id_to_label.get(int(idx), f"unknown_{int(idx)}"), "confidence": float(value)}
+                for value, idx in zip(values.cpu(), indices.cpu())
+            ]
+            return {"predicted_intent": predictions[0]["intent"], "confidence": predictions[0]["confidence"],
+                    "alternatives": predictions}
+        else:
+            # KNN retrieval-based classifier fallback using contrastive representations
+            retrieval_res = self.retrieve(text, top_k=top_n)
+            top_hit = retrieval_res[0] if retrieval_res else {"intent": "unknown", "similarity": 0.0}
+            alternatives = [{"intent": r["intent"], "confidence": float(r["similarity"])} for r in retrieval_res]
+            return {
+                "predicted_intent": top_hit["intent"],
+                "confidence": float(top_hit["similarity"]),
+                "alternatives": alternatives,
+                "mode": "knn_retrieval_classifier"
+            }
 
     def embed(self, text: str) -> np.ndarray:
         tokens = self.retrieval_tokenizer(

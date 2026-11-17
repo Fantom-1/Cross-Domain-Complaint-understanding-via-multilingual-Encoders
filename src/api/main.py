@@ -32,7 +32,6 @@ def get_engine() -> ComplaintEngine:
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"status": "ok", "engine_configured": all([
-        __import__("os").getenv("COMPLAINT_CLASSIFIER_DIR"),
         __import__("os").getenv("COMPLAINT_LABEL_MAP"),
         __import__("os").getenv("COMPLAINT_CONTRASTIVE_DIR"),
         __import__("os").getenv("COMPLAINT_RETRIEVAL_INDEX_DIR"),

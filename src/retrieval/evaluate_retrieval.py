@@ -63,6 +63,7 @@ def _encode_xlmv(texts: list[str], model_name: str, revision: str, model_dir: st
         projection.load_state_dict(torch.load(path / "projection_head.pt", map_location="cpu", weights_only=True))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    use_bf16 = bool(device.type == "cuda" and torch.cuda.is_bf16_supported())
     encoder.to(device).eval()
     if projection is not None:
         projection.to(device).eval()
@@ -72,11 +73,19 @@ def _encode_xlmv(texts: list[str], model_name: str, revision: str, model_dir: st
             batch = texts[start:start + batch_size]
             tokens = tokenizer(batch, padding=True, truncation=True, max_length=max_length, return_tensors="pt")
             tokens = {k: v.to(device) for k, v in tokens.items()}
-            out = encoder(**tokens).last_hidden_state
-            mask = tokens["attention_mask"].unsqueeze(-1).to(out.dtype)
-            pooled = (out * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)
-            if projection is not None:
-                pooled = projection(pooled)
+            if use_bf16:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    out = encoder(**tokens).last_hidden_state
+                    mask = tokens["attention_mask"].unsqueeze(-1).to(out.dtype)
+                    pooled = (out * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)
+                    if projection is not None:
+                        pooled = projection(pooled)
+            else:
+                out = encoder(**tokens).last_hidden_state
+                mask = tokens["attention_mask"].unsqueeze(-1).to(out.dtype)
+                pooled = (out * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1.0)
+                if projection is not None:
+                    pooled = projection(pooled)
             pooled = F.normalize(pooled.float(), p=2, dim=-1)
             chunks.append(pooled.cpu().numpy())
     return np.concatenate(chunks, axis=0).astype(np.float32)
@@ -261,7 +270,7 @@ def main() -> None:
     metrics, ranking = evaluate_ranks(query, gallery, ranks, args.top_k, args.cross_domain)
     metrics.update({"mode": args.mode, "query_csv": str(Path(args.query_csv)), "gallery_csv": str(Path(args.gallery_csv))})
     output = Path(args.output_dir)
-    output.mkdir(parents=True, exist_ok=False)
+    output.mkdir(parents=True, exist_ok=True)
     (output / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     ranking.to_csv(output / "rankings.csv", index=False)
     print(json.dumps(metrics, indent=2))

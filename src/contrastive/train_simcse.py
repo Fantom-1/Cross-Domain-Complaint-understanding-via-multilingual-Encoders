@@ -65,7 +65,11 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=128)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--max-steps", type=int, default=100)
+    parser.add_argument("--max-steps", type=int, default=0, help="0 for full epochs")
+    parser.add_argument("--eval-steps", type=int, default=250, help="Evaluate validation loss every N steps")
+    parser.add_argument("--early-stopping-patience", type=int, default=4, help="Patience evaluations before early stopping (0 to disable)")
+    parser.add_argument("--early-stopping-min-delta", type=float, default=0.001, help="Minimum delta to consider an improvement")
+    parser.add_argument("--val-csv", default=None, help="Optional validation CSV for early stopping loss tracking")
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--temperature", type=float, default=0.05)
     parser.add_argument("--projection-size", type=int, default=256)
@@ -98,9 +102,19 @@ def main() -> None:
     projection.to(device).train()
     if args.gradient_checkpointing:
         encoder.gradient_checkpointing_enable()
+    val_texts = []
+    if args.val_csv:
+        val_df = pd.read_csv(args.val_csv, keep_default_na=False)
+        val_texts = [str(t) for t in val_df["text"] if str(t).strip()][:500]
+
     optimizer = torch.optim.AdamW(list(encoder.parameters()) + list(projection.parameters()), lr=args.learning_rate)
     history = []
     step = 0
+    best_val_loss = float("inf")
+    patience_counter = 0
+    best_encoder_state = None
+    best_proj_state = None
+    early_stopped = False
 
     for epoch in range(args.epochs):
         for batch in loader:
@@ -124,11 +138,48 @@ def main() -> None:
             torch.nn.utils.clip_grad_norm_(list(encoder.parameters()) + list(projection.parameters()), 1.0)
             optimizer.step()
             step += 1
-            history.append({"step": step, "epoch": epoch + 1, "loss": float(loss.detach().cpu())})
+            loss_val = float(loss.detach().cpu())
+            record = {"step": step, "epoch": epoch + 1, "loss": loss_val}
+
+            if step % 25 == 0 and (not args.eval_steps or step % args.eval_steps != 0):
+                print(f"[Step {step:5d}] Epoch {epoch+1} | Train Loss: {loss_val:.4f}", flush=True)
+
+            # Periodic Evaluation and Early Stopping Check
+            if args.eval_steps and step % args.eval_steps == 0:
+                if val_texts:
+                    current_metric = _eval_simcse_val(encoder, projection, tokenizer, val_texts,
+                                                      device, use_bf16, args.max_length, args.temperature)
+                    record["val_loss"] = current_metric
+                else:
+                    # Rolling average of training loss if no validation split supplied
+                    current_metric = float(np.mean([h["loss"] for h in history[-args.eval_steps:]])) if history else loss_val
+                    record["eval_train_loss"] = current_metric
+
+                if current_metric < best_val_loss - args.early_stopping_min_delta:
+                    best_val_loss = current_metric
+                    patience_counter = 0
+                    best_encoder_state = {k: v.cpu().clone() for k, v in encoder.state_dict().items()}
+                    best_proj_state = {k: v.cpu().clone() for k, v in projection.state_dict().items()}
+                    print(f"[Step {step:5d}] Train Loss: {loss_val:.4f} | Eval Loss: {current_metric:.4f} (NEW BEST) | Patience: 0/{args.early_stopping_patience}", flush=True)
+                else:
+                    patience_counter += 1
+                    print(f"[Step {step:5d}] Train Loss: {loss_val:.4f} | Eval Loss: {current_metric:.4f} (Best: {best_val_loss:.4f}) | Patience: {patience_counter}/{args.early_stopping_patience}", flush=True)
+                    if args.early_stopping_patience > 0 and patience_counter >= args.early_stopping_patience:
+                        print(f"=== Early stopping triggered at step {step} (Patience {args.early_stopping_patience} reached. Restoring best model at loss {best_val_loss:.4f}) ===", flush=True)
+                        early_stopped = True
+                        history.append(record)
+                        break
+
+            history.append(record)
             if args.max_steps and step >= args.max_steps:
                 break
-        if args.max_steps and step >= args.max_steps:
+        if early_stopped or (args.max_steps and step >= args.max_steps):
             break
+
+    if best_encoder_state is not None:
+        print(f"Restoring best checkpoint with loss {best_val_loss:.4f}")
+        encoder.load_state_dict(best_encoder_state)
+        projection.load_state_dict(best_proj_state)
 
     encoder.save_pretrained(output / "encoder")
     tokenizer.save_pretrained(output / "encoder")
@@ -146,6 +197,36 @@ def main() -> None:
     print(json.dumps({"output_dir": str(output), "steps": step,
                       "final_loss": history[-1]["loss"] if history else None,
                       "device": str(device), "bf16": use_bf16}, indent=2))
+
+
+def _eval_simcse_val(encoder, projection, tokenizer, val_texts, device, use_bf16, max_length, temperature, batch_size=32):
+    encoder.eval()
+    projection.eval()
+    losses = []
+    with torch.no_grad():
+        for i in range(0, len(val_texts), batch_size):
+            chunk = val_texts[i : i + batch_size]
+            if len(chunk) < 2:
+                continue
+            tokens = tokenizer(chunk, padding=True, truncation=True, max_length=max_length, return_tensors="pt")
+            tokens = {k: v.to(device) for k, v in tokens.items()}
+            if use_bf16:
+                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    first = projection(mean_pool(encoder(**tokens).last_hidden_state, tokens["attention_mask"]))
+                    second = projection(mean_pool(encoder(**tokens).last_hidden_state, tokens["attention_mask"]))
+            else:
+                first = projection(mean_pool(encoder(**tokens).last_hidden_state, tokens["attention_mask"]))
+                second = projection(mean_pool(encoder(**tokens).last_hidden_state, tokens["attention_mask"]))
+            z = torch.cat([first, second], dim=0)
+            b = len(chunk)
+            sim = (z @ z.T) / temperature
+            sim = sim.masked_fill(torch.eye(2 * b, dtype=torch.bool, device=device), float("-inf"))
+            targets = torch.cat([torch.arange(b, 2 * b), torch.arange(0, b)]).to(device)
+            loss = F.cross_entropy(sim, targets)
+            losses.append(float(loss.cpu()))
+    encoder.train()
+    projection.train()
+    return float(np.mean(losses)) if losses else float("inf")
 
 
 def _simcse_loss(z: torch.Tensor, groups: list[str], clusters: list[str], temperature: float) -> torch.Tensor:

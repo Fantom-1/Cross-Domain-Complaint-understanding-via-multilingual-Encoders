@@ -1,0 +1,152 @@
+{
+  "model": "TF-IDF + LogisticRegression",
+  "vectorizer": {
+    "max_features": 50000,
+    "ngram_range": [
+      1,
+      2
+    ],
+    "sublinear_tf": true
+  },
+  "classifier": {
+    "C": 1.0,
+    "seed": 42,
+    "max_iter": 1000
+  },
+  "validation": {
+    "macro_f1": 0.5690546159913088,
+    "weighted_f1": 0.5674562631326766,
+    "accuracy": 0.5672796263864565,
+    "samples": 6852
+  },
+  "test": {
+    "macro_f1": 0.5722647472210866,
+    "weighted_f1": 0.5699990747150663,
+    "accuracy": 0.569614711033275,
+    "samples": 6852
+  },
+  "test_top_confusions": [
+    {
+      "gold": "reporting_investigation_dispute",
+      "predicted": "reporting_incorrect_information",
+      "count": 106
+    },
+    {
+      "gold": "debt_not_owed",
+      "predicted": "debt_threats",
+      "count": 77
+    },
+    {
+      "gold": "reporting_incorrect_information",
+      "predicted": "reporting_investigation_dispute",
+      "count": 76
+    },
+    {
+      "gold": "debt_not_owed",
+      "predicted": "debt_communication",
+      "count": 74
+    },
+    {
+      "gold": "debt_threats",
+      "predicted": "debt_not_owed",
+      "count": 74
+    },
+    {
+      "gold": "transaction_problem",
+      "predicted": "funds_availability",
+      "count": 73
+    },
+    {
+      "gold": "debt_threats",
+      "predicted": "debt_communication",
+      "count": 68
+    },
+    {
+      "gold": "funds_availability",
+      "predicted": "account_management",
+      "count": 68
+    },
+    {
+      "gold": "account_management",
+      "predicted": "funds_availability",
+      "count": 66
+    },
+    {
+      "gold": "debt_communication",
+      "predicted": "debt_not_owed",
+      "count": 65
+    },
+    {
+      "gold": "debt_communication",
+      "predicted": "debt_threats",
+      "count": 65
+    },
+    {
+      "gold": "closing_process",
+      "predicted": "application_problem",
+      "count": 53
+    },
+    {
+      "gold": "fraud_or_scam",
+      "predicted": "reporting_incorrect_information",
+      "count": 52
+    },
+    {
+      "gold": "closing_process",
+      "predicted": "payment_problem",
+      "count": 45
+    },
+    {
+      "gold": "fraud_or_scam",
+      "predicted": "funds_availability",
+      "count": 44
+    }
+  ],
+  "test_domain_slices": {
+    "bank_account": {
+      "samples": 877,
+      "accuracy": 0.5655644241733181,
+      "macro_f1": 0.18480792173872632
+    },
+    "credit_card": {
+      "samples": 885,
+      "accuracy": 0.6621468926553672,
+      "macro_f1": 0.2758123747781374
+    },
+    "credit_reporting": {
+      "samples": 1019,
+      "accuracy": 0.563297350343474,
+      "macro_f1": 0.14004902833460686
+    },
+    "debt_collection": {
+      "samples": 1447,
+      "accuracy": 0.5044920525224602,
+      "macro_f1": 0.1234980057693579
+    },
+    "money_transfer": {
+      "samples": 696,
+      "accuracy": 0.5086206896551724,
+      "macro_f1": 0.12385905902496648
+    },
+    "mortgage": {
+      "samples": 774,
+      "accuracy": 0.6718346253229974,
+      "macro_f1": 0.16892860571401144
+    },
+    "payday_personal_loan": {
+      "samples": 300,
+      "accuracy": 0.4666666666666667,
+      "macro_f1": 0.15776360336096934
+    },
+    "student_loan": {
+      "samples": 409,
+      "accuracy": 0.7701711491442543,
+      "macro_f1": 0.13209681159255696
+    },
+    "vehicle_loan": {
+      "samples": 445,
+      "accuracy": 0.42247191011235957,
+      "macro_f1": 0.18054909468422362
+    }
+  }
+}
