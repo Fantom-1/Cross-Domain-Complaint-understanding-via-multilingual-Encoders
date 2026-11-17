@@ -192,6 +192,8 @@ def generate_pairs(
                 "positive_id": str(positive["example_id"]),
                 "negative_id": str(negative["example_id"]),
                 "weak_label": str(anchor["label"]),
+                "positive_label": str(positive["label"]),
+                "negative_label": str(negative["label"]),
                 "anchor_domain": str(anchor["domain"]),
                 "positive_domain": str(positive["domain"]),
                 "negative_domain": str(negative["domain"]),
@@ -203,7 +205,7 @@ def generate_pairs(
 
     result = pd.DataFrame(rows, columns=[
         "pair_id", "anchor_id", "positive_id", "negative_id", "weak_label",
-        "anchor_domain", "positive_domain", "negative_domain", "positive_mode",
+        "positive_label", "negative_label", "anchor_domain", "positive_domain", "negative_domain", "positive_mode",
         "supervision", "seed",
     ])
     stats = {
