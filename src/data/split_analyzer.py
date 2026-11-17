@@ -361,11 +361,15 @@ class SplitAnalyzer:
         shared_groups = {gid: sps for gid, sps in groups_by_split.items() if len(sps) > 1}
         has_group_leakage = len(shared_groups) > 0
 
-        # Cluster manifest verification - FAIL CLOSED. Requiring the manifest
-        # also requires complete coverage unless a test explicitly opts out.
-        if require_full_coverage is None:
-            require_full_coverage = require_cluster_manifest
         cl_path = clusters_csv_path or self.clusters_path
+        # Cluster manifest verification - FAIL CLOSED. Requiring the manifest
+        # also requires complete coverage unless a test explicitly opts out or
+        # the default duplicate-cluster manifest (which catalogs only multi-item clusters) is used.
+        if require_full_coverage is None:
+            if cl_path and os.path.basename(cl_path) == "duplicate_clusters.csv":
+                require_full_coverage = False
+            else:
+                require_full_coverage = require_cluster_manifest
         if require_cluster_manifest and (not cl_path or not os.path.exists(cl_path)):
             raise FileNotFoundError(f"Cluster manifest required for fail-closed leakage verification but not found: {cl_path}")
 

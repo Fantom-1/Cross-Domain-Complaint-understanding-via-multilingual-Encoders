@@ -48,7 +48,7 @@ class PairSamplerTests(unittest.TestCase):
         pd.testing.assert_frame_equal(a, b)
 
     def test_incomplete_cluster_mapping_fails_closed(self):
-        with self.assertRaisesRegex(ValueError, "cover exactly"):
+        with self.assertRaisesRegex(ValueError, r"cover every train ID|cover exactly"):
             generate_pairs(self.train, self.clusters.iloc[:-1], self.splits)
 
     def test_non_train_row_fails(self):
