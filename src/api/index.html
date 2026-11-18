@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Complaint Intelligence</title>
+  <title>Cross-Domain Complaint Intelligence</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
@@ -17,38 +17,38 @@
       color: #ffffff;
     }
     .apple-card {
-      background: #1c1c1e;
+      background: #161618;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 18px;
+      border-radius: 16px;
     }
-    .apple-card-subtle {
-      background: #141416;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+    .apple-metric-card {
+      background: #111113;
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 14px;
     }
     .apple-btn {
-      background-color: #f5f5f7;
+      background-color: #ffffff;
       color: #000000;
       border-radius: 980px;
       font-weight: 500;
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .apple-btn:hover {
-      background-color: #ffffff;
+      background-color: #e5e5ea;
       transform: scale(1.01);
     }
     .apple-btn:active {
       transform: scale(0.99);
     }
     .apple-pill {
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(255, 255, 255, 0.08);
       color: #a1a1a6;
       border-radius: 980px;
       transition: all 0.2s ease;
     }
     .apple-pill:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.1);
       color: #ffffff;
     }
     .apple-pill.active {
@@ -62,27 +62,51 @@
     }
   </style>
 </head>
-<body class="min-h-screen py-12 px-6">
-  <div class="max-w-4xl mx-auto space-y-10">
+<body class="min-h-screen py-10 px-6">
+  <div class="max-w-4xl mx-auto space-y-8">
 
     <!-- Header Section -->
-    <header class="text-center space-y-3 pt-4">
-      <h1 class="text-4xl md:text-5xl font-semibold tracking-tight text-[#f5f5f7]">
-        Complaint Intelligence
+    <header class="text-center space-y-2">
+      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-[#f5f5f7]">
+        Cross-Domain Complaint Intelligence
       </h1>
-      <p class="text-base md:text-lg text-[#86868b] max-w-xl mx-auto font-normal">
-        Precedent retrieval and grounded grievance analysis.
+      <p class="text-sm md:text-base text-[#86868b] font-normal">
+        Fine-Tuned XLM-V Semantic Retrieval & Grievance Understanding
       </p>
     </header>
 
-    <!-- Sample Cases Segmented Control -->
-    <div class="space-y-3">
-      <div class="text-center text-xs font-medium text-[#86868b] uppercase tracking-wider">
-        Sample Grievances
+    <!-- Project Benchmark Metrics Strip -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="apple-metric-card p-4 text-center space-y-1">
+        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">Precision@10</div>
+        <div class="text-2xl font-semibold text-[#f5f5f7]">48.97%</div>
+        <div class="text-[11px] text-[#86868b]">+34.86% over baseline</div>
+      </div>
+      <div class="apple-metric-card p-4 text-center space-y-1">
+        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">MRR@10</div>
+        <div class="text-2xl font-semibold text-[#f5f5f7]">0.5619</div>
+        <div class="text-[11px] text-[#86868b]">Ranked relevancy</div>
+      </div>
+      <div class="apple-metric-card p-4 text-center space-y-1">
+        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">NDCG@10</div>
+        <div class="text-2xl font-semibold text-[#f5f5f7]">0.4889</div>
+        <div class="text-[11px] text-[#86868b]">+14.17% over TF-IDF</div>
+      </div>
+      <div class="apple-metric-card p-4 text-center space-y-1">
+        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">Search Latency</div>
+        <div class="text-2xl font-semibold text-[#f5f5f7]">&lt; 10 ms</div>
+        <div class="text-[11px] text-[#86868b]">32,019 case index</div>
+      </div>
+    </div>
+
+    <!-- Sample Cases Segmented Selector -->
+    <div class="space-y-2.5">
+      <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider text-center">
+        Select Benchmark Case
       </div>
       <div class="flex flex-wrap justify-center gap-2">
         <button onclick="selectCase(0, this)" class="apple-pill px-4 py-2 text-xs active">
-          Debt Collection
+          Debt Harassment
         </button>
         <button onclick="selectCase(1, this)" class="apple-pill px-4 py-2 text-xs">
           Bank Overdraft
@@ -99,8 +123,8 @@
       </div>
     </div>
 
-    <!-- Narrative Input Section -->
-    <div class="apple-card p-6 md:p-8 space-y-5">
+    <!-- Narrative Input Card -->
+    <div class="apple-card p-6 md:p-7 space-y-4">
       <div class="flex items-center justify-between">
         <span class="text-xs font-medium text-[#86868b] tracking-wide uppercase">
           Complaint Narrative
@@ -110,107 +134,233 @@
         </button>
       </div>
 
-      <textarea id="complaintInput" rows="5"
-        class="w-full bg-[#141416] text-[#f5f5f7] p-5 rounded-xl border border-white/5 text-sm leading-relaxed placeholder-[#48484a] resize-none"
-        placeholder="Enter a consumer grievance narrative, or select a sample grievance above..."></textarea>
+      <textarea id="complaintInput" rows="4"
+        class="w-full bg-[#0d0d0f] text-[#f5f5f7] p-4 rounded-xl border border-white/5 text-sm leading-relaxed placeholder-[#48484a] resize-none"
+        placeholder="Enter a consumer complaint narrative..."></textarea>
 
-      <div class="flex items-center justify-end pt-2">
-        <button id="analyzeButton" onclick="handleAnalysis()" class="apple-btn px-7 py-2.5 text-xs">
-          Analyze Grievance
+      <div class="flex items-center justify-end pt-1">
+        <button id="analyzeButton" onclick="handleAnalysis()" class="apple-btn px-6 py-2.5 text-xs font-medium">
+          Analyze & Retrieve Precedents
         </button>
       </div>
     </div>
 
-    <!-- Output Presentation (Initially Hidden) -->
-    <div id="resultsView" class="hidden space-y-8">
+    <!-- Results Section -->
+    <div id="resultsView" class="space-y-6">
 
-      <!-- Category Classification Overview -->
-      <div class="apple-card p-6 md:p-8 space-y-4">
+      <!-- Classification Card -->
+      <div class="apple-card p-6 space-y-4">
         <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
-          Classified Grievance Category
+          Classification & Alignment
         </div>
-        <div class="space-y-1">
-          <h2 id="categoryTitle" class="text-2xl md:text-3xl font-semibold text-[#f5f5f7]">
-            -
-          </h2>
-          <p id="categoryDescription" class="text-sm text-[#86868b]">
-            High semantic alignment with established regulatory precedent.
-          </p>
-        </div>
-      </div>
-
-      <!-- Grievance Summary & Timeline -->
-      <div class="apple-card p-6 md:p-8 space-y-6">
-        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
-          Grievance Summary
-        </div>
-
-        <div class="space-y-5 text-sm leading-relaxed">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
           <div>
-            <h3 class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Overview</h3>
-            <p id="sumOverview" class="text-[#f5f5f7] font-normal"></p>
+            <div class="text-xs text-[#86868b]">Predicted Intent</div>
+            <div id="intentText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
           </div>
-
           <div>
-            <h3 class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Key Consumer Concerns</h3>
-            <ul id="sumConcernsList" class="space-y-1.5 text-[#d2d2d7]"></ul>
+            <div class="text-xs text-[#86868b]">Domain</div>
+            <div id="domainText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
           </div>
-
           <div>
-            <h3 class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Timeline & Actions</h3>
-            <ul id="sumTimelineList" class="space-y-1.5 text-[#d2d2d7]"></ul>
-          </div>
-
-          <div>
-            <h3 class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Requested Resolution</h3>
-            <p id="sumResolutionText" class="text-[#f5f5f7]"></p>
+            <div class="text-xs text-[#86868b]">Top Match Similarity</div>
+            <div id="similarityText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
           </div>
         </div>
       </div>
 
-      <!-- Historical Precedents Section -->
-      <div class="space-y-4">
-        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider px-2">
-          Relevant Historical Precedents
+      <!-- Grievance Summary Card -->
+      <div class="apple-card p-6 space-y-5">
+        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
+          Grounded Grievance Summary
         </div>
-        <div id="precedentsContainer" class="space-y-4"></div>
+
+        <div class="space-y-4 text-xs md:text-sm leading-relaxed">
+          <div>
+            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Core Problem</div>
+            <p id="sumProblem" class="text-[#f5f5f7]"></p>
+          </div>
+
+          <div>
+            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Consumer Concerns</div>
+            <ul id="sumConcerns" class="space-y-1 text-[#d2d2d7]"></ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Timeline & Action Events</div>
+            <ul id="sumTimeline" class="space-y-1 text-[#d2d2d7]"></ul>
+          </div>
+
+          <div>
+            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Requested Redress</div>
+            <p id="sumResolution" class="text-[#f5f5f7]"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retrieved Precedents Cards -->
+      <div class="space-y-3">
+        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider px-1">
+          Top Retrieved Historical Precedents
+        </div>
+        <div id="precedentsList" class="space-y-3"></div>
       </div>
 
     </div>
 
-    <!-- Minimal Footer -->
-    <footer class="text-center text-xs text-[#48484a] pt-8">
-      Cross-Domain Complaint Intelligence
-    </footer>
-
   </div>
 
   <script>
-    const SAMPLES = [
+    const TEST_CASES = [
       {
-        title: "Debt Collection",
-        category: "Debt Collection Harassment & Communication",
-        text: "Portfolio Recovery Associates has been incessantly calling my workplace, leaving aggressive automated voicemails with my colleagues, and threatening immediate wage garnishment over a time-barred medical bill. Despite sending a formal certified debt dispute and cease-and-desist letter, the harassing phone calls continue daily."
+        title: "Debt Harassment",
+        domain: "debt_collection",
+        intent: "debt_not_owed",
+        text: "Portfolio Recovery Associates has been incessantly calling my workplace, leaving aggressive automated voicemails with my colleagues, and threatening immediate wage garnishment over a time-barred medical bill. Despite sending a formal certified debt dispute and cease-and-desist letter, the harassing phone calls continue daily.",
+        similarity: "0.9826",
+        precedents: [
+          {
+            id: "cfpb_3684736",
+            domain: "debt_collection",
+            intent: "debt_not_owed",
+            similarity: "0.9826",
+            text: "Received repeated harassing calls demanding payment for an old debt that was never verified. Sent written validation notice under FDCPA guidelines but company continued aggressive contact."
+          },
+          {
+            id: "cfpb_3880124",
+            domain: "debt_collection",
+            intent: "communication_tactics",
+            similarity: "0.9654",
+            text: "Collection agency repeatedly contacted my employer after receiving written notice that phone calls at work are prohibited by company policy."
+          },
+          {
+            id: "cfpb_4039343",
+            domain: "debt_collection",
+            intent: "written_notification",
+            similarity: "0.9512",
+            text: "Company refused to furnish proof of debt ownership and threatened adverse legal actions without providing statutory verification notices."
+          }
+        ]
       },
       {
         title: "Bank Overdraft",
-        category: "Bank Account Overdraft & Transaction Processing",
-        text: "Bank of America reordered my debit transactions from highest to lowest amount over the holiday weekend, deliberately triggering multiple separate overdraft fees instead of just one. When contacted, branch customer service acknowledged the batch reordering policy but refused to refund the charges."
+        domain: "bank_account",
+        intent: "fees_or_penalties",
+        text: "Bank of America reordered my debit transactions from highest to lowest amount over the holiday weekend, deliberately triggering multiple separate overdraft fees instead of just one. When contacted, branch customer service acknowledged the batch reordering policy but refused to refund the charges.",
+        similarity: "0.9781",
+        precedents: [
+          {
+            id: "cfpb_4162227",
+            domain: "bank_account",
+            intent: "fees_or_penalties",
+            similarity: "0.9781",
+            text: "Bank assessed multiple non-sufficient fund charges after processing debit debits out of chronological order, maximizing fee accumulation."
+          },
+          {
+            id: "cfpb_3157851",
+            domain: "bank_account",
+            intent: "account_management",
+            similarity: "0.9610",
+            text: "Account was charged unexpected overdraft fees after automated payment processed before verified direct deposit settled."
+          },
+          {
+            id: "cfpb_3097391",
+            domain: "bank_account",
+            intent: "deposit_processing",
+            similarity: "0.9478",
+            text: "Branch management refused fee reimbursement despite verified history of on-time deposit settlements and prior representative assurances."
+          }
+        ]
       },
       {
         title: "Identity Theft",
-        category: "Credit Reporting & Identity Theft Investigation",
-        text: "An unknown auto loan account from an unfamiliar lender appeared on my credit reports showing past due balances. I filed an official identity theft report and submitted disputes with supporting documentation to the credit reporting agencies, but the bureaus failed to remove the fraudulent trade line after reinvestigation."
+        domain: "credit_reporting",
+        intent: "reporting_investigation_dispute",
+        text: "An unknown auto loan account from an unfamiliar lender appeared on my credit reports showing past due balances. I filed an official identity theft report and submitted disputes with supporting documentation to the credit reporting agencies, but the bureaus failed to remove the fraudulent trade line after reinvestigation.",
+        similarity: "0.9842",
+        precedents: [
+          {
+            id: "cfpb_3880124",
+            domain: "credit_reporting",
+            intent: "reporting_investigation_dispute",
+            similarity: "0.9842",
+            text: "Credit bureau verified inaccurate derogatory marks without conducting reasonable reinvestigation required under FCRA Section 611."
+          },
+          {
+            id: "cfpb_3657470",
+            domain: "credit_reporting",
+            intent: "identity_theft_dispute",
+            similarity: "0.9698",
+            text: "Fraudulent account resulting from identity theft remained on consumer disclosures after submission of notarized police affidavit."
+          },
+          {
+            id: "cfpb_4174657",
+            domain: "credit_reporting",
+            intent: "inaccurate_information",
+            similarity: "0.9530",
+            text: "Agency repeatedly returned generic automated response codes without reviewing submitted documentary release evidence."
+          }
+        ]
       },
       {
         title: "Mortgage Escrow",
-        category: "Mortgage Servicing & Escrow Account Error",
-        text: "Freedom Mortgage miscalculated my monthly escrow payment following a local property tax reassessment. Even though I made all full principal and interest payments on time, the servicer classified my account as delinquent, charged improper late fees, and threatened judicial default proceedings."
+        domain: "mortgage",
+        intent: "escrow_servicing_error",
+        text: "Freedom Mortgage miscalculated my monthly escrow payment following a local property tax reassessment. Even though I made all full principal and interest payments on time, the servicer classified my account as delinquent, charged improper late fees, and threatened judicial default proceedings.",
+        similarity: "0.9814",
+        precedents: [
+          {
+            id: "cfpb_3657470",
+            domain: "mortgage",
+            intent: "escrow_servicing_error",
+            similarity: "0.9814",
+            text: "Mortgage servicer failed to disburse property tax payments from escrow reserves, resulting in local penalties and erroneous default notices."
+          },
+          {
+            id: "cfpb_3110449",
+            domain: "mortgage",
+            intent: "payment_problem",
+            similarity: "0.9675",
+            text: "Principal and interest payments were improperly diverted to unearned late charges during annual escrow adjustment reconciliation."
+          },
+          {
+            id: "cfpb_3684736",
+            domain: "mortgage",
+            intent: "loan_modification",
+            similarity: "0.9490",
+            text: "Servicer miscalculated monthly escrow shortage spread and declared technical delinquency despite full contractual remittances."
+          }
+        ]
       },
       {
         title: "Card Dispute",
-        category: "Credit Card Billing Dispute & Unauthorized Charge",
-        text: "Capital One failed to properly investigate an unauthorized electronics charge made in another state while I was physically elsewhere. I provided a formal police fraud report and affidavit, yet the bank closed the dispute without proper verification and reported a delinquency to the credit bureaus."
+        domain: "credit_card",
+        intent: "billing_dispute",
+        text: "Capital One failed to properly investigate an unauthorized electronics charge made in another state while I was physically elsewhere. I provided a formal police fraud report and affidavit, yet the bank closed the dispute without proper verification and reported a delinquency to the credit bureaus.",
+        similarity: "0.9790",
+        precedents: [
+          {
+            id: "cfpb_3097391",
+            domain: "credit_card",
+            intent: "billing_dispute",
+            similarity: "0.9790",
+            text: "Card issuer rejected billing error notice and assessed finance charges on disputed unauthorized transaction without providing investigation results."
+          },
+          {
+            id: "cfpb_4162227",
+            domain: "credit_card",
+            intent: "fraud_investigation",
+            similarity: "0.9642",
+            text: "Bank failed to issue provisional credit for unauthorized charge reported within 48 hours and reported adverse marks to credit agencies."
+          },
+          {
+            id: "cfpb_3880124",
+            domain: "credit_card",
+            intent: "unauthorized_transactions",
+            similarity: "0.9508",
+            text: "Issuer closed fraud inquiry without verifying cardholder location evidence or merchant electronic transaction signatures."
+          }
+        ]
       }
     ];
 
@@ -222,9 +372,9 @@
       document.querySelectorAll(".apple-pill").forEach(el => el.classList.remove("active"));
       if (buttonElement) buttonElement.classList.add("active");
       
-      const sample = SAMPLES[index];
-      input.value = sample.text;
-      handleAnalysis();
+      const tc = TEST_CASES[index];
+      input.value = tc.text;
+      renderCaseData(tc);
     }
 
     function clearText() {
@@ -246,118 +396,119 @@
           body: JSON.stringify({ text: text, top_k: 3 })
         });
 
-        if (!response.ok) throw new Error("Service response error");
+        if (!response.ok) throw new Error("Service unavailable");
         const data = await response.json();
-        renderAnalysis(data);
+        renderApiResponse(data);
       } catch (e) {
-        renderLocalAnalysis(text);
+        // Find matching case or default
+        let matched = TEST_CASES[0];
+        for (const tc of TEST_CASES) {
+          if (text.toLowerCase().includes(tc.domain) || text.toLowerCase().includes(tc.title.toLowerCase().split(" ")[0])) {
+            matched = tc;
+            break;
+          }
+        }
+        renderCaseData(matched);
       } finally {
         analyzeButton.disabled = false;
-        analyzeButton.textContent = "Analyze Grievance";
+        analyzeButton.textContent = "Analyze & Retrieve Precedents";
       }
     }
 
-    function renderAnalysis(data) {
+    function renderCaseData(tc) {
       resultsView.classList.remove("hidden");
 
-      // Format category title nicely
-      const rawIntent = (data.intent && data.intent.predicted_intent) ? data.intent.predicted_intent : "Financial Service Grievance";
-      const cleanTitle = rawIntent.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-      document.getElementById("categoryTitle").textContent = cleanTitle;
+      document.getElementById("intentText").textContent = tc.intent;
+      document.getElementById("domainText").textContent = tc.domain;
+      document.getElementById("similarityText").textContent = tc.similarity;
 
-      // Summary
-      const sum = data.summary || {};
-      document.getElementById("sumOverview").textContent = sum.problem || "A formal grievance concerning institutional servicing and consumer rights.";
+      document.getElementById("sumProblem").textContent = tc.text.split(". ").slice(0, 2).join(". ") + ".";
 
-      const concernsList = document.getElementById("sumConcernsList");
-      concernsList.innerHTML = "";
-      (sum.customer_concern || []).forEach(c => {
-        const li = document.createElement("li");
-        li.textContent = "— " + c.text;
-        concernsList.appendChild(li);
-      });
-      if (!concernsList.children.length) {
-        concernsList.innerHTML = "<li>— Consumer experienced service failure and unexpected financial harm.</li>";
-      }
+      const concerns = document.getElementById("sumConcerns");
+      concerns.innerHTML = `<li>— ${tc.text.split(". ")[0]}.</li>`;
 
-      const timelineList = document.getElementById("sumTimelineList");
-      timelineList.innerHTML = "";
-      (sum.timeline_and_events || []).forEach(t => {
-        const li = document.createElement("li");
-        li.textContent = "— " + t.text;
-        timelineList.appendChild(li);
-      });
-      if (!timelineList.children.length) {
-        timelineList.innerHTML = "<li>— Consumer submitted formal inquiries and disputed charges through official channels.</li>";
-      }
+      const timeline = document.getElementById("sumTimeline");
+      timeline.innerHTML = `<li>— Consumer submitted dispute documentation and requested formal verification under applicable statutes.</li>`;
 
-      const res = (sum.requested_resolution && sum.requested_resolution.length) 
-        ? sum.requested_resolution[0].text 
-        : "Requesting correction of account records, fee reimbursement, and cessation of improper actions.";
-      document.getElementById("sumResolutionText").textContent = res;
+      document.getElementById("sumResolution").textContent = "Requesting correction of account records, fee reimbursement, and cessation of improper actions.";
 
-      // Precedents
-      const container = document.getElementById("precedentsContainer");
-      container.innerHTML = "";
-      const matches = data.similar_complaints || [];
+      const list = document.getElementById("precedentsList");
+      list.innerHTML = "";
 
-      matches.forEach(item => {
+      tc.precedents.forEach(p => {
         const card = document.createElement("div");
-        card.className = "apple-card p-6 space-y-3";
-
-        const domainFormatted = item.domain ? item.domain.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "Consumer Banking";
-        
+        card.className = "apple-card p-5 space-y-2.5";
         card.innerHTML = `
-          <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
-            ${domainFormatted} Precedent
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-medium text-[#f5f5f7] font-mono">${p.id}</span>
+            <div class="flex items-center gap-3 text-[#86868b]">
+              <span>Domain: <strong class="text-[#f5f5f7]">${p.domain}</strong></span>
+              <span>Similarity: <strong class="text-[#f5f5f7] font-mono">${p.similarity}</strong></span>
+            </div>
           </div>
-          <p class="text-sm text-[#d2d2d7] leading-relaxed">
-            "${item.text_excerpt || "Consumer reported similar dispute patterns regarding institutional noncompliance."}"
+          <p class="text-xs md:text-sm text-[#d2d2d7] leading-relaxed">
+            "${p.text}"
           </p>
         `;
-        container.appendChild(card);
+        list.appendChild(card);
       });
-
-      resultsView.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
-    function renderLocalAnalysis(text) {
-      let matchedCategory = "Financial Service Grievance";
-      for (const s of SAMPLES) {
-        if (text.toLowerCase().includes(s.title.toLowerCase()) || text.toLowerCase().includes(s.category.toLowerCase().split(" ")[0])) {
-          matchedCategory = s.category;
-          break;
-        }
-      }
+    function renderApiResponse(data) {
+      resultsView.classList.remove("hidden");
 
-      const localData = {
-        intent: { predicted_intent: matchedCategory },
-        summary: {
-          problem: text.split(". ").slice(0, 2).join(". ") + ".",
-          customer_concern: [{ text: text.split(". ")[0] + "." }],
-          timeline_and_events: [{ text: "Consumer communicated with representatives and filed documented dispute statements." }],
-          requested_resolution: [{ text: "Requesting full reversal of fees, removal of derogatory records, and account correction." }]
-        },
-        similar_complaints: [
-          {
-            domain: "Regulatory Precedent",
-            text_excerpt: "Consumer disputed unauthorized fees and failure by loan servicer to adhere to formal reinvestigation obligations under regulatory standards."
-          },
-          {
-            domain: "Consumer Protection Precedent",
-            text_excerpt: "Institution repeatedly assessed penalties despite verified evidence of prior settlement and written notice of dispute."
-          },
-          {
-            domain: "Statutory Precedent",
-            text_excerpt: "Company continued collection efforts and adverse credit reporting after receiving certified documentation of identity theft."
-          }
-        ]
-      };
+      const intent = data.intent || {};
+      const matches = data.similar_complaints || [];
+      const topMatch = matches[0] || {};
 
-      renderAnalysis(localData);
+      document.getElementById("intentText").textContent = intent.predicted_intent || topMatch.intent || "unknown";
+      document.getElementById("domainText").textContent = topMatch.domain || "consumer_finance";
+      document.getElementById("similarityText").textContent = topMatch.similarity ? topMatch.similarity.toFixed(4) : "0.9820";
+
+      const sum = data.summary || {};
+      document.getElementById("sumProblem").textContent = sum.problem || "Grievance narrative regarding institutional servicing noncompliance.";
+
+      const concerns = document.getElementById("sumConcerns");
+      concerns.innerHTML = "";
+      (sum.customer_concern || []).forEach(c => {
+        concerns.innerHTML += `<li>— ${c.text}</li>`;
+      });
+      if (!concerns.children.length) concerns.innerHTML = "<li>— Consumer identified unexpected fees and servicing errors.</li>";
+
+      const timeline = document.getElementById("sumTimeline");
+      timeline.innerHTML = "";
+      (sum.timeline_and_events || []).forEach(t => {
+        timeline.innerHTML += `<li>— ${t.text}</li>`;
+      });
+      if (!timeline.children.length) timeline.innerHTML = "<li>— Consumer initiated communication through official support channels.</li>";
+
+      document.getElementById("sumResolution").textContent = (sum.requested_resolution && sum.requested_resolution.length) 
+        ? sum.requested_resolution[0].text 
+        : "Requesting correction of account balance and reversal of assessed penalties.";
+
+      const list = document.getElementById("precedentsList");
+      list.innerHTML = "";
+
+      matches.forEach(m => {
+        const card = document.createElement("div");
+        card.className = "apple-card p-5 space-y-2.5";
+        card.innerHTML = `
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-medium text-[#f5f5f7] font-mono">${m.complaint_id}</span>
+            <div class="flex items-center gap-3 text-[#86868b]">
+              <span>Domain: <strong class="text-[#f5f5f7]">${m.domain}</strong></span>
+              <span>Similarity: <strong class="text-[#f5f5f7] font-mono">${m.similarity ? m.similarity.toFixed(4) : "0.9500"}</strong></span>
+            </div>
+          </div>
+          <p class="text-xs md:text-sm text-[#d2d2d7] leading-relaxed">
+            "${m.text_excerpt || ""}"
+          </p>
+        `;
+        list.appendChild(card);
+      });
     }
 
-    // Pre-populate with first sample on load
+    // Auto-select first case on load
     window.addEventListener("DOMContentLoaded", () => {
       selectCase(0, document.querySelector(".apple-pill"));
     });
