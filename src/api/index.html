@@ -7,58 +7,58 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background-color: #000000;
-      color: #f5f5f7;
+      background-color: #ffffff;
+      color: #111111;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
     ::selection {
-      background-color: #0071e3;
+      background-color: #111111;
       color: #ffffff;
     }
     .apple-card {
-      background: #161618;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #fafafa;
+      border: 1px solid #e5e5e5;
       border-radius: 16px;
     }
     .apple-metric-card {
-      background: #111113;
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: #ffffff;
+      border: 1px solid #e5e5e5;
       border-radius: 14px;
     }
     .apple-btn {
-      background-color: #ffffff;
-      color: #000000;
+      background-color: #000000;
+      color: #ffffff;
       border-radius: 980px;
       font-weight: 500;
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .apple-btn:hover {
-      background-color: #e5e5ea;
+      background-color: #222222;
       transform: scale(1.01);
     }
     .apple-btn:active {
       transform: scale(0.99);
     }
     .apple-pill {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: #a1a1a6;
+      background: #f4f4f5;
+      border: 1px solid #e4e4e7;
+      color: #52525b;
       border-radius: 980px;
       transition: all 0.2s ease;
     }
     .apple-pill:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #ffffff;
+      background: #e4e4e7;
+      color: #000000;
     }
     .apple-pill.active {
-      background: #ffffff;
-      color: #000000;
-      border-color: #ffffff;
+      background: #000000;
+      color: #ffffff;
+      border-color: #000000;
     }
     textarea:focus {
       outline: none;
-      border-color: rgba(255, 255, 255, 0.2);
+      border-color: #000000;
     }
   </style>
 </head>
@@ -67,10 +67,10 @@
 
     <!-- Header Section -->
     <header class="text-center space-y-2">
-      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-[#f5f5f7]">
+      <h1 class="text-3xl md:text-4xl font-semibold tracking-tight text-[#111111]">
         Cross-Domain Complaint Intelligence
       </h1>
-      <p class="text-sm md:text-base text-[#86868b] font-normal">
+      <p class="text-sm md:text-base text-[#666666] font-normal">
         Fine-Tuned XLM-V Semantic Retrieval & Grievance Understanding
       </p>
     </header>
@@ -78,30 +78,30 @@
     <!-- Project Benchmark Metrics Strip -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div class="apple-metric-card p-4 text-center space-y-1">
-        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">Precision@10</div>
-        <div class="text-2xl font-semibold text-[#f5f5f7]">48.97%</div>
-        <div class="text-[11px] text-[#86868b]">+34.86% over baseline</div>
+        <div class="text-[11px] font-medium text-[#71717a] uppercase tracking-wider">Precision@10</div>
+        <div class="text-2xl font-bold text-[#000000]">48.97%</div>
+        <div class="text-[11px] text-[#71717a] font-medium">+34.86% over baseline</div>
       </div>
       <div class="apple-metric-card p-4 text-center space-y-1">
-        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">MRR@10</div>
-        <div class="text-2xl font-semibold text-[#f5f5f7]">0.5619</div>
-        <div class="text-[11px] text-[#86868b]">Ranked relevancy</div>
+        <div class="text-[11px] font-medium text-[#71717a] uppercase tracking-wider">MRR@10</div>
+        <div class="text-2xl font-bold text-[#000000]">0.5619</div>
+        <div class="text-[11px] text-[#71717a]">Ranked relevancy</div>
       </div>
       <div class="apple-metric-card p-4 text-center space-y-1">
-        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">NDCG@10</div>
-        <div class="text-2xl font-semibold text-[#f5f5f7]">0.4889</div>
-        <div class="text-[11px] text-[#86868b]">+14.17% over TF-IDF</div>
+        <div class="text-[11px] font-medium text-[#71717a] uppercase tracking-wider">NDCG@10</div>
+        <div class="text-2xl font-bold text-[#000000]">0.4889</div>
+        <div class="text-[11px] text-[#71717a] font-medium">+14.17% over TF-IDF</div>
       </div>
       <div class="apple-metric-card p-4 text-center space-y-1">
-        <div class="text-[11px] font-medium text-[#86868b] uppercase tracking-wider">Search Latency</div>
-        <div class="text-2xl font-semibold text-[#f5f5f7]">&lt; 10 ms</div>
-        <div class="text-[11px] text-[#86868b]">32,019 case index</div>
+        <div class="text-[11px] font-medium text-[#71717a] uppercase tracking-wider">Search Latency</div>
+        <div class="text-2xl font-bold text-[#000000]">&lt; 10 ms</div>
+        <div class="text-[11px] text-[#71717a]">32,019 case index</div>
       </div>
     </div>
 
     <!-- Sample Cases Segmented Selector -->
     <div class="space-y-2.5">
-      <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider text-center">
+      <div class="text-xs font-medium text-[#71717a] uppercase tracking-wider text-center">
         Select Benchmark Case
       </div>
       <div class="flex flex-wrap justify-center gap-2">
@@ -126,20 +126,20 @@
     <!-- Narrative Input Card -->
     <div class="apple-card p-6 md:p-7 space-y-4">
       <div class="flex items-center justify-between">
-        <span class="text-xs font-medium text-[#86868b] tracking-wide uppercase">
+        <span class="text-xs font-semibold text-[#111111] tracking-wide uppercase">
           Complaint Narrative
         </span>
-        <button onclick="clearText()" class="text-xs text-[#86868b] hover:text-[#f5f5f7] transition">
+        <button onclick="clearText()" class="text-xs text-[#71717a] hover:text-[#000000] transition">
           Clear
         </button>
       </div>
 
       <textarea id="complaintInput" rows="4"
-        class="w-full bg-[#0d0d0f] text-[#f5f5f7] p-4 rounded-xl border border-white/5 text-sm leading-relaxed placeholder-[#48484a] resize-none"
+        class="w-full bg-[#ffffff] text-[#111111] p-4 rounded-xl border border-[#d4d4d8] text-sm leading-relaxed placeholder-[#a1a1aa] resize-none"
         placeholder="Enter a consumer complaint narrative..."></textarea>
 
       <div class="flex items-center justify-end pt-1">
-        <button id="analyzeButton" onclick="handleAnalysis()" class="apple-btn px-6 py-2.5 text-xs font-medium">
+        <button id="analyzeButton" onclick="handleAnalysis()" class="apple-btn px-6 py-2.5 text-xs">
           Analyze & Retrieve Precedents
         </button>
       </div>
@@ -149,58 +149,58 @@
     <div id="resultsView" class="space-y-6">
 
       <!-- Classification Card -->
-      <div class="apple-card p-6 space-y-4">
-        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
+      <div class="apple-card p-6 space-y-3">
+        <div class="text-xs font-semibold text-[#111111] uppercase tracking-wider">
           Classification & Alignment
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-          <div>
-            <div class="text-xs text-[#86868b]">Predicted Intent</div>
-            <div id="intentText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
+          <div class="p-3 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs text-[#71717a]">Predicted Intent</div>
+            <div id="intentText" class="text-base font-bold text-[#000000] mt-0.5">-</div>
           </div>
-          <div>
-            <div class="text-xs text-[#86868b]">Domain</div>
-            <div id="domainText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
+          <div class="p-3 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs text-[#71717a]">Domain</div>
+            <div id="domainText" class="text-base font-bold text-[#000000] mt-0.5">-</div>
           </div>
-          <div>
-            <div class="text-xs text-[#86868b]">Top Match Similarity</div>
-            <div id="similarityText" class="text-lg font-semibold text-[#f5f5f7] mt-0.5">-</div>
+          <div class="p-3 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs text-[#71717a]">Top Match Similarity</div>
+            <div id="similarityText" class="text-base font-bold text-[#000000] font-mono mt-0.5">-</div>
           </div>
         </div>
       </div>
 
       <!-- Grievance Summary Card -->
-      <div class="apple-card p-6 space-y-5">
-        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider">
+      <div class="apple-card p-6 space-y-4">
+        <div class="text-xs font-semibold text-[#111111] uppercase tracking-wider">
           Grounded Grievance Summary
         </div>
 
         <div class="space-y-4 text-xs md:text-sm leading-relaxed">
-          <div>
-            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Core Problem</div>
-            <p id="sumProblem" class="text-[#f5f5f7]"></p>
+          <div class="p-3.5 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs font-semibold text-[#111111] uppercase tracking-wide mb-1">Core Problem</div>
+            <p id="sumProblem" class="text-[#27272a]"></p>
           </div>
 
-          <div>
-            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Consumer Concerns</div>
-            <ul id="sumConcerns" class="space-y-1 text-[#d2d2d7]"></ul>
+          <div class="p-3.5 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs font-semibold text-[#111111] uppercase tracking-wide mb-1">Consumer Concerns</div>
+            <ul id="sumConcerns" class="space-y-1 text-[#3f3f46]"></ul>
           </div>
 
-          <div>
-            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Timeline & Action Events</div>
-            <ul id="sumTimeline" class="space-y-1 text-[#d2d2d7]"></ul>
+          <div class="p-3.5 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs font-semibold text-[#111111] uppercase tracking-wide mb-1">Timeline & Action Events</div>
+            <ul id="sumTimeline" class="space-y-1 text-[#3f3f46]"></ul>
           </div>
 
-          <div>
-            <div class="text-xs font-medium text-[#86868b] uppercase tracking-wide mb-1">Requested Redress</div>
-            <p id="sumResolution" class="text-[#f5f5f7]"></p>
+          <div class="p-3.5 rounded-xl bg-white border border-gray-200">
+            <div class="text-xs font-semibold text-[#111111] uppercase tracking-wide mb-1">Requested Redress</div>
+            <p id="sumResolution" class="text-[#27272a] font-medium"></p>
           </div>
         </div>
       </div>
 
       <!-- Retrieved Precedents Cards -->
       <div class="space-y-3">
-        <div class="text-xs font-medium text-[#86868b] uppercase tracking-wider px-1">
+        <div class="text-xs font-semibold text-[#111111] uppercase tracking-wider px-1">
           Top Retrieved Historical Precedents
         </div>
         <div id="precedentsList" class="space-y-3"></div>
@@ -400,7 +400,6 @@
         const data = await response.json();
         renderApiResponse(data);
       } catch (e) {
-        // Find matching case or default
         let matched = TEST_CASES[0];
         for (const tc of TEST_CASES) {
           if (text.toLowerCase().includes(tc.domain) || text.toLowerCase().includes(tc.title.toLowerCase().split(" ")[0])) {
@@ -439,14 +438,14 @@
         const card = document.createElement("div");
         card.className = "apple-card p-5 space-y-2.5";
         card.innerHTML = `
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-medium text-[#f5f5f7] font-mono">${p.id}</span>
-            <div class="flex items-center gap-3 text-[#86868b]">
-              <span>Domain: <strong class="text-[#f5f5f7]">${p.domain}</strong></span>
-              <span>Similarity: <strong class="text-[#f5f5f7] font-mono">${p.similarity}</strong></span>
+          <div class="flex items-center justify-between text-xs pb-1 border-b border-gray-200">
+            <span class="font-bold text-[#000000] font-mono">${p.id}</span>
+            <div class="flex items-center gap-3 text-[#71717a]">
+              <span>Domain: <strong class="text-[#000000]">${p.domain}</strong></span>
+              <span>Similarity: <strong class="text-[#000000] font-mono">${p.similarity}</strong></span>
             </div>
           </div>
-          <p class="text-xs md:text-sm text-[#d2d2d7] leading-relaxed">
+          <p class="text-xs md:text-sm text-[#3f3f46] leading-relaxed">
             "${p.text}"
           </p>
         `;
@@ -493,14 +492,14 @@
         const card = document.createElement("div");
         card.className = "apple-card p-5 space-y-2.5";
         card.innerHTML = `
-          <div class="flex items-center justify-between text-xs">
-            <span class="font-medium text-[#f5f5f7] font-mono">${m.complaint_id}</span>
-            <div class="flex items-center gap-3 text-[#86868b]">
-              <span>Domain: <strong class="text-[#f5f5f7]">${m.domain}</strong></span>
-              <span>Similarity: <strong class="text-[#f5f5f7] font-mono">${m.similarity ? m.similarity.toFixed(4) : "0.9500"}</strong></span>
+          <div class="flex items-center justify-between text-xs pb-1 border-b border-gray-200">
+            <span class="font-bold text-[#000000] font-mono">${m.complaint_id}</span>
+            <div class="flex items-center gap-3 text-[#71717a]">
+              <span>Domain: <strong class="text-[#000000]">${m.domain}</strong></span>
+              <span>Similarity: <strong class="text-[#000000] font-mono">${m.similarity ? m.similarity.toFixed(4) : "0.9500"}</strong></span>
             </div>
           </div>
-          <p class="text-xs md:text-sm text-[#d2d2d7] leading-relaxed">
+          <p class="text-xs md:text-sm text-[#3f3f46] leading-relaxed">
             "${m.text_excerpt || ""}"
           </p>
         `;
