@@ -12,3 +12,4 @@ This directory contains the final compiled Markdown (`.md`) reports for the **Cr
 | **[DATA_PREPARATION_METHODOLOGY.md](DATA_PREPARATION_METHODOLOGY.md)** | **Data Preprocessing Report**: Multi-line CSV parser, malformed line handling, BOM stripping, text sanitization, and `<REDACTED>` token normalization. |
 | **[SPLITS_AND_LEAKAGE_AUDIT.md](SPLITS_AND_LEAKAGE_AUDIT.md)** | **Split Feasibility & Partition Hygiene**: Proof of atomic duplicate-cluster grouping (`data/manifests/full_clusters.csv`) and zero group leakage across Train (32,019), Val (6,852), and Test (6,852). |
 | **[TAXONOMY_CODEBOOK.md](TAXONOMY_CODEBOOK.md)** | **Taxonomy & Mapping Standards**: Unified taxonomy definition across 9 financial domains, weak administrative routing labels vs. human truth, and cross-domain pair mining rules. |
+
